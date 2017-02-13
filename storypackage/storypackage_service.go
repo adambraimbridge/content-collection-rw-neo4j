@@ -2,7 +2,7 @@ package storypackage
 
 import (
 	"encoding/json"
-	"fmt"
+	//"fmt"
 	//	"github.com/Financial-Times/neo-model-utils-go/mapper"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	log "github.com/Sirupsen/logrus"
@@ -33,7 +33,7 @@ func (cd service) Initialise() error {
 	}
 
 	return cd.conn.EnsureConstraints(map[string]string{
-		"Curation": "uuid"})
+		"StoryPackage": "uuid"})
 }
 
 // Check - Feeds into the Healthcheck and checks whether we can connect to Neo and that the datastore isn't empty
@@ -50,10 +50,11 @@ func (pcd service) Read(uuid string) (interface{}, bool, error) {
 	}{}
 
 	query := &neoism.CypherQuery{
-		Statement: `MATCH (n:Curation {uuid:{uuid}}) 
+		Statement: `MATCH (n {uuid:{uuid}}) WHERE {label} IN labels(n)
 				RETURN n.uuid as uuid, n.publishReference as publishReference, n.lastModified as lastModified`,
 		Parameters: map[string]interface{}{
-			"uuid": uuid,
+			"label": "StoryPackage",
+			"uuid":  uuid,
 		},
 		Result: &results,
 	}
@@ -82,29 +83,61 @@ func (pcd service) Read(uuid string) (interface{}, bool, error) {
 //Write - Writes a story package node
 func (pcd service) Write(thing interface{}) error {
 	log.Info("Entered write")
-	/*	sp := thing.(storyPackage)
-		params := map[string]interface{}{
+	sp := thing.(storyPackage)
+
+	spDeleteRelationshipsQuery := &neoism.CypherQuery{
+		Statement: `MATCH (sp:Thing {uuid: {uuid}})
+			MATCH (item:Thing)<-[rel:SELECTS]-(sp) 
+			DELETE rel`,
+		Parameters: map[string]interface{}{
 			"uuid": sp.UUID,
-		} */
+		},
+	}
 
-	return nil
+	params := map[string]interface{}{
+		"uuid":             sp.UUID,
+		"publishReference": sp.PublishReference,
+		"lastModified":     sp.LastModified,
+	}
+
+	writeSPQuery := &neoism.CypherQuery{
+		Statement: `MERGE (sp:Thing {uuid: {uuid}})
+		    set sp={allprops}
+		    set sp :Curation:StoryPackage`,
+		Parameters: map[string]interface{}{
+			"uuid":     sp.UUID,
+			"allprops": params,
+		},
+	}
+
+	queries := []*neoism.CypherQuery{spDeleteRelationshipsQuery, writeSPQuery}
+
+	for i, item := range sp.Items {
+		addItemQuery := addStoryPackageItemQuery(sp.UUID, item.UUID, i+1)
+		queries = append(queries, addItemQuery)
+	}
+
+	return pcd.conn.CypherBatch(queries)
 }
 
-func addStoryPackageItemQuery(itemUuid string) *neoism.CypherQuery {
-	statement := `	`
+func addStoryPackageItemQuery(storyPackageUuid string, itemUuid string, order int) *neoism.CypherQuery {
 	query := &neoism.CypherQuery{
-		Statement:  statement,
-		Parameters: map[string]interface{}{},
+		Statement: `MATCH (storyPackage:StoryPackage {uuid: {spUuid}})
+			MERGE (content:Thing {uuid: {contentUuid}})
+			MERGE (storyPackage)-[rel:SELECTS {order: {itemOrder}}]->(content)`,
+		Parameters: map[string]interface{}{
+			"spUuid":      storyPackageUuid,
+			"contentUuid": itemUuid,
+			"itemOrder":   order,
+		},
 	}
+
+	return query
 }
 
-func extractUUIDFromURI(uri string) (string, error) {
-	result := uuidExtractRegex.FindStringSubmatch(uri)
-	if len(result) == 2 {
-		return result[1], nil
-	}
-
-	return "", fmt.Errorf("Couldn't extract uuid from uri %s", uri)
+//Delete - Deletes a story package
+func (pcd service) Delete(uuid string) (bool, error) {
+	return true, nil
 }
 
 // DecodeJSON - Decodes JSON into story package
@@ -115,13 +148,24 @@ func (pcd service) DecodeJSON(dec *json.Decoder) (interface{}, string, error) {
 	return sp, sp.UUID, err
 }
 
-//Delete - Deletes a content
-func (pcd service) Delete(uuid string) (bool, error) {
-	return true, nil
-}
-
 // Count - Returns a count of the number of content in this Neo instance
 func (pcd service) Count() (int, error) {
-	log.Info("Infof - Count")
-	return 34444, nil
+	results := []struct {
+		Count int `json:"c"`
+	}{}
+
+	query := &neoism.CypherQuery{
+		Statement: `MATCH (n) WHERE {label} IN labels(n) RETURN count(n) as c`,
+		Parameters: map[string]interface{}{
+			"label": "StoryPackage",
+		},
+		Result: &results,
+	}
+
+	err := pcd.conn.CypherBatch([]*neoism.CypherQuery{query})
+	if err != nil {
+		return 0, err
+	}
+
+	return results[0].Count, nil
 }
