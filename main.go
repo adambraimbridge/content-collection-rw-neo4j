@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
 	"github.com/Financial-Times/go-fthealth/v1a"
+	"github.com/Financial-Times/http-handlers-go/httphandlers"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	"github.com/Financial-Times/service-status-go/gtg"
 	status "github.com/Financial-Times/service-status-go/httphandlers"
-	"github.com/Financial-Times/story-package-rw-neo4j/storypackage"
+	"github.com/Financial-Times/story-package-rw-neo4j/contentcollection"
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"github.com/jawher/mow.cli"
+	"github.com/rcrowley/go-metrics"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -79,7 +81,6 @@ func main() {
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
 
 		if *env != "local" {
-			//TODO check app name
 			f, err := os.OpenFile("/var/log/apps/content-collection-rw-neo4j-go-app.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 			if err == nil {
 				log.SetOutput(f)
@@ -90,33 +91,15 @@ func main() {
 			defer f.Close()
 		}
 
-		/// this to be removed
-		//storyPackageService := storypackage.NewCypherStoryPackageService(db)
-		//storyPackageService.Initialise()
-		//
-		//
-		//services := map[string]baseftrwapp.Service{"story-package": storyPackageService}
-		//
-		var checks []v1a.Check
-		//for _, service := range services {
-		//	checks = append(checks, makeCheck(service, db))
-		//}
-
-		healthHandler := v1a.Handler("ft-content-collection_rw_neo4j ServiceModule", "Writes 'content' to Neo4j, usually as part of a bulk upload done on a schedule", checks...)
-
 		var m http.Handler
-		m = router(healthHandler, db)
+		m = router(db)
 
-		//if conf.EnableReqLog {
-		//	m = httphandlers.TransactionAwareRequestLoggingHandler(log.StandardLogger(), m)
-		//}
-		//m = httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry, m)
+		m = httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry, m)
 
 		http.Handle("/", m)
 
 		log.Printf("listening on %d", *port)
 		log.Println(http.ListenAndServe(fmt.Sprintf(":%d", *port), nil).Error())
-		//TODO check app name
 		log.Println("exiting on content-collection-rw-neo4j")
 
 	}
@@ -127,27 +110,25 @@ func main() {
 }
 
 //Router sets up the Router - extracted for testability
-func router(healthHandler func(http.ResponseWriter, *http.Request), neoConnection neoutils.NeoConnection) *mux.Router {
+func router(neoConnection neoutils.NeoConnection) *mux.Router {
 
-	neoHandler := storypackage.NewNeoHttpHandler(neoConnection)
+	healthHandler := v1a.Handler("ft-content-collection_rw_neo4j ServiceModule", "Writes 'content' to Neo4j, usually as part of a bulk upload done on a schedule", makeCheck(neoConnection))
+	neoHandler := contentcollection.NewNeoHttpHandler(neoConnection)
 
 	m := mux.NewRouter()
 
 	gtgChecker := make([]gtg.StatusChecker, 0)
 
-	storyHandler := storypackage.NewStoryPackageHttpHandler(neoHandler)
+	storyHandler := contentcollection.NewStoryPackageHttpHandler(neoHandler)
 	m.HandleFunc("/content-collection/story-package/__count", storyHandler.CountHandler).Methods("GET")
 	m.HandleFunc("/content-collection/story-package/{uuid}", storyHandler.GetHandler).Methods("GET")
 	m.HandleFunc("/content-collection/story-package/{uuid}", storyHandler.PutHandler).Methods("PUT")
 	m.HandleFunc("/content-collection/story-package/{uuid}", storyHandler.DeleteHandler).Methods("DELETE")
-
-	//gtgChecker = append(gtgChecker, func() gtg.Status {
-	//	if err := service.Check(); err != nil {
-	//		return gtg.Status{GoodToGo: false, Message: err.Error()}
-	//	}
-	//
-	//	return gtg.Status{GoodToGo: true}
-	//})
+	contentHandler := contentcollection.NewContentPackageHttpHandler(neoHandler)
+	m.HandleFunc("/content-collection/content-package/__count", contentHandler.CountHandler).Methods("GET")
+	m.HandleFunc("/content-collection/content-package/{uuid}", contentHandler.GetHandler).Methods("GET")
+	m.HandleFunc("/content-collection/content-package/{uuid}", contentHandler.PutHandler).Methods("PUT")
+	m.HandleFunc("/content-collection/content-package/{uuid}", contentHandler.DeleteHandler).Methods("DELETE")
 
 	m.HandleFunc("/__health", healthHandler)
 	// The top one of these feels more correct, but the lower one matches what we have in Dropwizard,
@@ -161,17 +142,16 @@ func router(healthHandler func(http.ResponseWriter, *http.Request), neoConnectio
 	m.HandleFunc(status.BuildInfoPathDW, status.BuildInfoHandler)
 
 	m.HandleFunc(status.GTGPath, status.NewGoodToGoHandler(gtg.FailFastParallelCheck(gtgChecker)))
-
 	return m
 }
 
-func makeCheck(service baseftrwapp.Service, cr neoutils.CypherRunner) v1a.Check {
+func makeCheck(cr neoutils.CypherRunner) v1a.Check {
 	return v1a.Check{
 		BusinessImpact:   "Cannot read/write content via this writer",
 		Name:             "Check connectivity to Neo4j - neoUrl is a parameter in hieradata for this service",
 		PanicGuide:       "TODO - write panic guide",
 		Severity:         1,
 		TechnicalSummary: fmt.Sprintf("Cannot connect to Neo4j instance %s with something written to it", cr),
-		Checker:          func() (string, error) { return "", service.Check() },
+		Checker:          func() (string, error) { return "", neoutils.Check(cr) },
 	}
 }

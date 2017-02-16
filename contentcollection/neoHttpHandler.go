@@ -1,14 +1,11 @@
-package storypackage
+package contentcollection
 
 import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-
 	"compress/gzip"
-
 	"io"
-
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	"github.com/Financial-Times/up-rw-app-api-go/rwapi"
 	"github.com/gorilla/mux"

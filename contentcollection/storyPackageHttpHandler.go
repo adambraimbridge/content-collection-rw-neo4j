@@ -1,4 +1,4 @@
-package storypackage
+package contentcollection
 
 import (
 	"net/http"
