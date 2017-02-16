@@ -78,7 +78,7 @@ func main() {
 
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
 
-		services := map[string]baseftrwapp.Service{"story-package": storyPackageService}
+		services := map[string]baseftrwapp.Service{"content-collection": storyPackageService}
 
 		var checks []v1a.Check
 		for _, service := range services {
@@ -87,9 +87,9 @@ func main() {
 
 		baseftrwapp.RunServerWithConf(baseftrwapp.RWConf{
 			Services:      services,
-			HealthHandler: v1a.Handler("ft-content_rw_neo4j ServiceModule", "Writes 'content' to Neo4j, usually as part of a bulk upload done on a schedule", checks...),
+			HealthHandler: v1a.Handler("content-collection-rw-neo4j ServiceModule", "Writes 'content collections' to Neo4j, usually as part of a bulk upload done on a schedule", checks...),
 			Port:          *port,
-			ServiceName:   "story-package-rw-neo4j",
+			ServiceName:   "content-collection-rw-neo4j",
 			Env:           *env,
 			EnableReqLog:  false,
 		})

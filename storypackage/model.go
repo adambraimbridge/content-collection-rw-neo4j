@@ -1,6 +1,6 @@
 package storypackage
 
-type storyPackage struct {
+type contentCollection struct {
 	UUID             string `json:"uuid,omitempty"`
 	Items            []item `json:"items,omitempty"`
 	PublishReference string `json:"publishReference"`

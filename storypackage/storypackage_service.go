@@ -12,6 +12,16 @@ import (
 
 var uuidExtractRegex = regexp.MustCompile(".*/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
 
+/*type Service interface {
+	Write(thing interface{}, collectionType string) error
+	Read(uuid string, collectionType string) (thing interface{}, found bool, err error)
+	Delete(uuid string) (found bool, err error)
+	DecodeJSON(*json.Decoder) (thing interface{}, identity string, err error)
+	Count(collectionType string) (int, error)
+	Check() error
+	Initialise() error
+}*/
+
 // CypherDriver - CypherDriver
 type service struct {
 	conn neoutils.NeoConnection
@@ -41,19 +51,22 @@ func (pcd service) Check() error {
 	return neoutils.Check(pcd.conn)
 }
 
-// Read - reads a story package given a UUID
-func (pcd service) Read(uuid string) (interface{}, bool, error) {
-	log.Infof("Trying to read story package with uuid: %v", uuid)
-
+// Read - reads a content collection given a UUID
+func (pcd service) Read(uuid string /*, collectionType string*/) (interface{}, bool, error) {
+	collectionType := "StoryPackage"
+	log.Infof("read SP with uuid: %v", uuid)
 	results := []struct {
-		storyPackage
+		contentCollection
 	}{}
 
 	query := &neoism.CypherQuery{
 		Statement: `MATCH (n {uuid:{uuid}}) WHERE {label} IN labels(n)
-				RETURN n.uuid as uuid, n.publishReference as publishReference, n.lastModified as lastModified`,
+				OPTIONAL MATCH (n)-[rel:SELECTS]->(t:Thing)
+				WITH n, collect({uuid:t.uuid}) as items, rel
+				RETURN n.uuid as uuid, n.publishReference as publishReference, n.lastModified as lastModified, items
+				ORDER BY rel.order`,
 		Parameters: map[string]interface{}{
-			"label": "StoryPackage",
+			"label": collectionType,
 			"uuid":  uuid,
 		},
 		Result: &results,
@@ -62,94 +75,126 @@ func (pcd service) Read(uuid string) (interface{}, bool, error) {
 	err := pcd.conn.CypherBatch([]*neoism.CypherQuery{query})
 
 	if err != nil {
-		return storyPackage{}, false, err
+		return contentCollection{}, false, err
 	}
 
 	if len(results) == 0 {
-		return storyPackage{}, false, nil
+		return contentCollection{}, false, nil
 	}
 
 	result := results[0]
 
-	storyPackageResult := storyPackage{
+	contentCollectionResult := contentCollection{
 		UUID:             result.UUID,
 		PublishReference: result.PublishReference,
 		LastModified:     result.LastModified,
+		Items:            result.Items,
 	}
 
-	return storyPackageResult, true, nil
+	return contentCollectionResult, true, nil
 }
 
-//Write - Writes a story package node
-func (pcd service) Write(thing interface{}) error {
-	log.Info("Entered write")
-	sp := thing.(storyPackage)
+//Write - Writes a content collection node
+func (pcd service) Write( thing interface{}, /*collectionType string, */) error {
+	collectionType := "StoryPackage"
+	newContentCollection := thing.(contentCollection)
 
-	spDeleteRelationshipsQuery := &neoism.CypherQuery{
-		Statement: `MATCH (sp:Thing {uuid: {uuid}})
-			MATCH (item:Thing)<-[rel:SELECTS]-(sp) 
+	deleteRelationshipsQuery := &neoism.CypherQuery{
+		Statement: `MATCH (n:Thing {uuid: {uuid}})
+			MATCH (item:Thing)<-[rel:SELECTS]-(n) 
 			DELETE rel`,
 		Parameters: map[string]interface{}{
-			"uuid": sp.UUID,
+			"uuid": newContentCollection.UUID,
 		},
 	}
 
 	params := map[string]interface{}{
-		"uuid":             sp.UUID,
-		"publishReference": sp.PublishReference,
-		"lastModified":     sp.LastModified,
+		"uuid":             newContentCollection.UUID,
+		"publishReference": newContentCollection.PublishReference,
+		"lastModified":     newContentCollection.LastModified,
 	}
 
-	writeSPQuery := &neoism.CypherQuery{
-		Statement: `MERGE (sp:Thing {uuid: {uuid}})
-		    set sp={allprops}
-		    set sp :Curation:StoryPackage`,
+	writeContentCollectionQuery := &neoism.CypherQuery{
+		Statement: `MERGE (n:Thing {uuid: {uuid}})
+		    set n={allprops}
+		    set n :Curation:` + collectionType,
 		Parameters: map[string]interface{}{
-			"uuid":     sp.UUID,
+			"uuid":     newContentCollection.UUID,
 			"allprops": params,
 		},
 	}
 
-	queries := []*neoism.CypherQuery{spDeleteRelationshipsQuery, writeSPQuery}
+	queries := []*neoism.CypherQuery{deleteRelationshipsQuery, writeContentCollectionQuery}
 
-	for i, item := range sp.Items {
-		addItemQuery := addStoryPackageItemQuery(sp.UUID, item.UUID, i+1)
+	for i, item := range newContentCollection.Items {
+		addItemQuery := addStoryPackageItemQuery(collectionType, newContentCollection.UUID, item.UUID, i+1)
 		queries = append(queries, addItemQuery)
 	}
 
 	return pcd.conn.CypherBatch(queries)
 }
 
-func addStoryPackageItemQuery(storyPackageUuid string, itemUuid string, order int) *neoism.CypherQuery {
+func addStoryPackageItemQuery(contentCollectionType string, contentCollectionUuid string, itemUuid string, order int) *neoism.CypherQuery {
 	query := &neoism.CypherQuery{
-		Statement: `MATCH (storyPackage:StoryPackage {uuid: {spUuid}})
+		Statement: `MATCH (n {uuid:{contentCollectionUuid}}) WHERE {label} IN labels(n)
 			MERGE (content:Thing {uuid: {contentUuid}})
-			MERGE (storyPackage)-[rel:SELECTS {order: {itemOrder}}]->(content)`,
+			MERGE (n)-[rel:SELECTS {order: {itemOrder}}]->(content)`,
 		Parameters: map[string]interface{}{
-			"spUuid":      storyPackageUuid,
-			"contentUuid": itemUuid,
-			"itemOrder":   order,
+			"label":                 contentCollectionType,
+			"contentCollectionUuid": contentCollectionUuid,
+			"contentUuid":           itemUuid,
+			"itemOrder":             order,
 		},
 	}
 
 	return query
 }
 
-//Delete - Deletes a story package
+//Delete - Deletes a content collection
 func (pcd service) Delete(uuid string) (bool, error) {
-	return true, nil
+	removeRelationships := &neoism.CypherQuery{
+		Statement: `MATCH (n:Thing {uuid: {uuid}})
+			OPTIONAL MATCH (item:Thing)<-[rel:SELECTS]-(n)
+			DELETE rel`,
+		Parameters: map[string]interface{}{
+			"uuid": uuid,
+		},
+		IncludeStats: true,
+	}
+
+	removeNode := &neoism.CypherQuery{
+		Statement: `MATCH (n:Thing {uuid: {uuid}}) DELETE n`,
+		Parameters: map[string]interface{}{
+			"uuid": uuid,
+		},
+	}
+
+	err := pcd.conn.CypherBatch([]*neoism.CypherQuery{removeRelationships, removeNode})
+
+	s1, err := removeRelationships.Stats()
+	if err != nil {
+		return false, err
+	}
+
+	var deleted bool
+	if s1.ContainsUpdates && s1.LabelsRemoved > 0 {
+		deleted = true
+	}
+
+	return deleted, err
 }
 
 // DecodeJSON - Decodes JSON into story package
 func (pcd service) DecodeJSON(dec *json.Decoder) (interface{}, string, error) {
-	sp := storyPackage{}
-	err := dec.Decode(&sp)
+	c := contentCollection{}
+	err := dec.Decode(&c)
 
-	return sp, sp.UUID, err
+	return c, c.UUID, err
 }
 
 // Count - Returns a count of the number of content in this Neo instance
-func (pcd service) Count() (int, error) {
+func (pcd service) Count( /*collectionType string*/ ) (int, error) {
+	collectionType := "StoryPackage"
 	results := []struct {
 		Count int `json:"c"`
 	}{}
@@ -157,7 +202,7 @@ func (pcd service) Count() (int, error) {
 	query := &neoism.CypherQuery{
 		Statement: `MATCH (n) WHERE {label} IN labels(n) RETURN count(n) as c`,
 		Parameters: map[string]interface{}{
-			"label": "StoryPackage",
+			"label": collectionType,
 		},
 		Result: &results,
 	}
