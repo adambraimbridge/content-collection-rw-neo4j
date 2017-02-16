@@ -3,7 +3,7 @@ package storypackage
 import (
 	"encoding/json"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
-	log "github.com/Sirupsen/logrus"
+	//	log "github.com/Sirupsen/logrus"
 	"github.com/jmcvetta/neoism"
 )
 
@@ -47,7 +47,6 @@ func (pcd service) Check() error {
 
 // Read - reads a content collection given a UUID
 func (pcd service) Read(uuid string, collectionType string) (interface{}, bool, error) {
-	log.Infof("read SP with uuid: %v", uuid)
 	results := []struct {
 		contentCollection
 	}{}
@@ -55,9 +54,9 @@ func (pcd service) Read(uuid string, collectionType string) (interface{}, bool, 
 	query := &neoism.CypherQuery{
 		Statement: `MATCH (n {uuid:{uuid}}) WHERE {label} IN labels(n)
 				OPTIONAL MATCH (n)-[rel:SELECTS]->(t:Thing)
-				WITH n, collect({uuid:t.uuid}) as items, rel
-				RETURN n.uuid as uuid, n.publishReference as publishReference, n.lastModified as lastModified, items
-				ORDER BY rel.order`,
+				WITH n, rel, t
+				ORDER BY rel.order
+				RETURN n.uuid as uuid, n.publishReference as publishReference, n.lastModified as lastModified, collect({uuid:t.uuid}) as items`,
 		Parameters: map[string]interface{}{
 			"label": collectionType,
 			"uuid":  uuid,
@@ -76,6 +75,9 @@ func (pcd service) Read(uuid string, collectionType string) (interface{}, bool, 
 	}
 
 	result := results[0]
+	if len(result.Items) == 1 && (result.Items[0].UUID == "") {
+		result.Items = []item{}
+	}
 
 	contentCollectionResult := contentCollection{
 		UUID:             result.UUID,
@@ -151,7 +153,6 @@ func (pcd service) Delete(uuid string) (bool, error) {
 		Parameters: map[string]interface{}{
 			"uuid": uuid,
 		},
-		IncludeStats: true,
 	}
 
 	removeNode := &neoism.CypherQuery{
@@ -159,17 +160,18 @@ func (pcd service) Delete(uuid string) (bool, error) {
 		Parameters: map[string]interface{}{
 			"uuid": uuid,
 		},
+		IncludeStats: true,
 	}
 
 	err := pcd.conn.CypherBatch([]*neoism.CypherQuery{removeRelationships, removeNode})
 
-	s1, err := removeRelationships.Stats()
+	s1, err := removeNode.Stats()
 	if err != nil {
 		return false, err
 	}
 
 	var deleted bool
-	if s1.ContainsUpdates && s1.LabelsRemoved > 0 {
+	if s1.NodesDeleted > 0 {
 		deleted = true
 	}
 
