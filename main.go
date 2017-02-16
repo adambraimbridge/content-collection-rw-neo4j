@@ -5,10 +5,13 @@ import (
 	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
 	"github.com/Financial-Times/go-fthealth/v1a"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
+	"github.com/Financial-Times/service-status-go/gtg"
+	status "github.com/Financial-Times/service-status-go/httphandlers"
 	"github.com/Financial-Times/story-package-rw-neo4j/storypackage"
 	log "github.com/Sirupsen/logrus"
+	"github.com/gorilla/mux"
 	"github.com/jawher/mow.cli"
-	//	"net/http"
+	"net/http"
 	_ "net/http/pprof"
 	"os"
 )
@@ -73,31 +76,93 @@ func main() {
 			log.Errorf("Could not connect to neo4j, error=[%s]\n", err)
 		}
 
-		storyPackageService := storypackage.NewCypherStoryPackageService(db)
-		storyPackageService.Initialise()
-
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
 
-		services := map[string]baseftrwapp.Service{"content-collection": storyPackageService}
-
-		var checks []v1a.Check
-		for _, service := range services {
-			checks = append(checks, makeCheck(service, db))
+		if *env != "local" {
+			//TODO check app name
+			f, err := os.OpenFile("/var/log/apps/content-collection-rw-neo4j-go-app.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+			if err == nil {
+				log.SetOutput(f)
+				log.SetFormatter(&log.TextFormatter{DisableColors: true})
+			} else {
+				log.Fatalf("Failed to initialise log file, %v", err)
+			}
+			defer f.Close()
 		}
 
-		baseftrwapp.RunServerWithConf(baseftrwapp.RWConf{
-			Services:      services,
-			HealthHandler: v1a.Handler("content-collection-rw-neo4j ServiceModule", "Writes 'content collections' to Neo4j, usually as part of a bulk upload done on a schedule", checks...),
-			Port:          *port,
-			ServiceName:   "content-collection-rw-neo4j",
-			Env:           *env,
-			EnableReqLog:  false,
-		})
+		/// this to be removed
+		//storyPackageService := storypackage.NewCypherStoryPackageService(db)
+		//storyPackageService.Initialise()
+		//
+		//
+		//services := map[string]baseftrwapp.Service{"story-package": storyPackageService}
+		//
+		var checks []v1a.Check
+		//for _, service := range services {
+		//	checks = append(checks, makeCheck(service, db))
+		//}
+
+		healthHandler := v1a.Handler("ft-content-collection_rw_neo4j ServiceModule", "Writes 'content' to Neo4j, usually as part of a bulk upload done on a schedule", checks...)
+
+		var m http.Handler
+		m = router(healthHandler, db)
+
+		//if conf.EnableReqLog {
+		//	m = httphandlers.TransactionAwareRequestLoggingHandler(log.StandardLogger(), m)
+		//}
+		//m = httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry, m)
+
+		http.Handle("/", m)
+
+		log.Printf("listening on %d", *port)
+		log.Println(http.ListenAndServe(fmt.Sprintf(":%d", *port), nil).Error())
+		//TODO check app name
+		log.Println("exiting on content-collection-rw-neo4j")
+
 	}
 
 	log.SetLevel(log.InfoLevel)
 	log.Infof("Application started with args %s", os.Args)
 	app.Run(os.Args)
+}
+
+//Router sets up the Router - extracted for testability
+func router(healthHandler func(http.ResponseWriter, *http.Request), neoConnection neoutils.NeoConnection) *mux.Router {
+
+	neoHandler := storypackage.NewNeoHttpHandler(neoConnection)
+
+	m := mux.NewRouter()
+
+	gtgChecker := make([]gtg.StatusChecker, 0)
+
+	storyHandler := storypackage.NewStoryPackageHttpHandler(neoHandler)
+	m.HandleFunc("/content-collection/story-package/__count", storyHandler.CountHandler).Methods("GET")
+	m.HandleFunc("/content-collection/story-package/{uuid}", storyHandler.GetHandler).Methods("GET")
+	m.HandleFunc("/content-collection/story-package/{uuid}", storyHandler.PutHandler).Methods("PUT")
+	m.HandleFunc("/content-collection/story-package/{uuid}", storyHandler.DeleteHandler).Methods("DELETE")
+
+	//gtgChecker = append(gtgChecker, func() gtg.Status {
+	//	if err := service.Check(); err != nil {
+	//		return gtg.Status{GoodToGo: false, Message: err.Error()}
+	//	}
+	//
+	//	return gtg.Status{GoodToGo: true}
+	//})
+
+	m.HandleFunc("/__health", healthHandler)
+	// The top one of these feels more correct, but the lower one matches what we have in Dropwizard,
+	// so it's what apps expect currently
+	m.HandleFunc(status.PingPath, status.PingHandler)
+	m.HandleFunc(status.PingPathDW, status.PingHandler)
+
+	// The top one of these feels more correct, but the lower one matches what we have in Dropwizard,
+	// so it's what apps expect currently same as ping, the content of build-info needs more definition
+	m.HandleFunc(status.BuildInfoPath, status.BuildInfoHandler)
+	m.HandleFunc(status.BuildInfoPathDW, status.BuildInfoHandler)
+
+	m.HandleFunc(status.GTGPath, status.NewGoodToGoHandler(gtg.FailFastParallelCheck(gtgChecker)))
+
+	return m
 }
 
 func makeCheck(service baseftrwapp.Service, cr neoutils.CypherRunner) v1a.Check {

@@ -2,17 +2,12 @@ package storypackage
 
 import (
 	"encoding/json"
-	//"fmt"
-	//	"github.com/Financial-Times/neo-model-utils-go/mapper"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	log "github.com/Sirupsen/logrus"
 	"github.com/jmcvetta/neoism"
-	"regexp"
 )
 
-var uuidExtractRegex = regexp.MustCompile(".*/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$")
-
-/*type Service interface {
+type Service interface {
 	Write(thing interface{}, collectionType string) error
 	Read(uuid string, collectionType string) (thing interface{}, found bool, err error)
 	Delete(uuid string) (found bool, err error)
@@ -20,15 +15,14 @@ var uuidExtractRegex = regexp.MustCompile(".*/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{
 	Count(collectionType string) (int, error)
 	Check() error
 	Initialise() error
-}*/
+}
 
-// CypherDriver - CypherDriver
 type service struct {
 	conn neoutils.NeoConnection
 }
 
-//NewCypherDriver instantiate driver
-func NewCypherStoryPackageService(cypherRunner neoutils.NeoConnection) service {
+//instantiate service
+func NewCypherStoryPackageService(cypherRunner neoutils.NeoConnection) Service {
 	return service{cypherRunner}
 }
 
@@ -52,8 +46,7 @@ func (pcd service) Check() error {
 }
 
 // Read - reads a content collection given a UUID
-func (pcd service) Read(uuid string /*, collectionType string*/) (interface{}, bool, error) {
-	collectionType := "StoryPackage"
+func (pcd service) Read(uuid string, collectionType string) (interface{}, bool, error) {
 	log.Infof("read SP with uuid: %v", uuid)
 	results := []struct {
 		contentCollection
@@ -95,8 +88,7 @@ func (pcd service) Read(uuid string /*, collectionType string*/) (interface{}, b
 }
 
 //Write - Writes a content collection node
-func (pcd service) Write( thing interface{}, /*collectionType string, */) error {
-	collectionType := "StoryPackage"
+func (pcd service) Write(thing interface{}, collectionType string) error {
 	newContentCollection := thing.(contentCollection)
 
 	deleteRelationshipsQuery := &neoism.CypherQuery{
@@ -193,8 +185,7 @@ func (pcd service) DecodeJSON(dec *json.Decoder) (interface{}, string, error) {
 }
 
 // Count - Returns a count of the number of content in this Neo instance
-func (pcd service) Count( /*collectionType string*/ ) (int, error) {
-	collectionType := "StoryPackage"
+func (pcd service) Count(collectionType string) (int, error) {
 	results := []struct {
 		Count int `json:"c"`
 	}{}
