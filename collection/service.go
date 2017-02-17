@@ -1,4 +1,4 @@
-package contentcollection
+package collection
 
 import (
 	"encoding/json"
@@ -22,7 +22,7 @@ type service struct {
 }
 
 //instantiate service
-func NewCypherStoryPackageService(cypherRunner neoutils.NeoConnection) Service {
+func NewHttpHandler(cypherRunner neoutils.NeoConnection) Service {
 	return service{cypherRunner}
 }
 

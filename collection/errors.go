@@ -1,4 +1,4 @@
-package contentcollection
+package collection
 
 // InvalidRequestError for if a bad request has been issued to a method
 type invalidRequestError interface {

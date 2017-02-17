@@ -1,4 +1,4 @@
-package contentcollection
+package collection
 
 type contentCollection struct {
 	UUID             string `json:"uuid"`

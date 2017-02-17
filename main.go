@@ -8,7 +8,7 @@ import (
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	"github.com/Financial-Times/service-status-go/gtg"
 	status "github.com/Financial-Times/service-status-go/httphandlers"
-	"github.com/Financial-Times/story-package-rw-neo4j/contentcollection"
+	"github.com/Financial-Times/story-package-rw-neo4j/collection"
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"github.com/jawher/mow.cli"
@@ -113,18 +113,18 @@ func main() {
 func router(neoConnection neoutils.NeoConnection) *mux.Router {
 
 	healthHandler := v1a.Handler("ft-content-collection_rw_neo4j ServiceModule", "Writes 'content' to Neo4j, usually as part of a bulk upload done on a schedule", makeCheck(neoConnection))
-	neoHandler := contentcollection.NewNeoHttpHandler(neoConnection)
+	neoHandler := collection.NewNeoHttpHandler(neoConnection)
 
 	m := mux.NewRouter()
 
 	gtgChecker := make([]gtg.StatusChecker, 0)
 
-	storyHandler := contentcollection.NewStoryPackageHttpHandler(neoHandler)
+	storyHandler := collection.NewContentCollectionHttpHandler(neoHandler, "StoryPackage")
 	m.HandleFunc("/content-collection/story-package/__count", storyHandler.CountHandler).Methods("GET")
 	m.HandleFunc("/content-collection/story-package/{uuid}", storyHandler.GetHandler).Methods("GET")
 	m.HandleFunc("/content-collection/story-package/{uuid}", storyHandler.PutHandler).Methods("PUT")
 	m.HandleFunc("/content-collection/story-package/{uuid}", storyHandler.DeleteHandler).Methods("DELETE")
-	contentHandler := contentcollection.NewContentPackageHttpHandler(neoHandler)
+	contentHandler := collection.NewContentCollectionHttpHandler(neoHandler, "ContentPackage")
 	m.HandleFunc("/content-collection/content-package/__count", contentHandler.CountHandler).Methods("GET")
 	m.HandleFunc("/content-collection/content-package/{uuid}", contentHandler.GetHandler).Methods("GET")
 	m.HandleFunc("/content-collection/content-package/{uuid}", contentHandler.PutHandler).Methods("PUT")

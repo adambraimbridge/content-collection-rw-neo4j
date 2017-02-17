@@ -1,4 +1,4 @@
-package contentcollection
+package collection
 
 import (
 	"encoding/json"
@@ -25,7 +25,7 @@ type handler struct {
 }
 
 func NewNeoHttpHandler(cypherRunner neoutils.NeoConnection) NeoHttpHandler {
-	service := NewCypherStoryPackageService(cypherRunner)
+	service := NewHttpHandler(cypherRunner)
 	service.Initialise()
 	return &handler{service}
 }
