@@ -19,7 +19,7 @@ import (
 )
 
 func main() {
-	app := cli.App("story-package-rw-neo4j", "A RESTful API for managing Story Packages in neo4j")
+	app := cli.App("content-collection-rw-neo4j", "A RESTful API for managing Story Packages in neo4j")
 
 	neoURL := app.String(cli.StringOpt{
 		Name:   "neo-url",
