@@ -111,20 +111,19 @@ func main() {
 
 //Router sets up the Router - extracted for testability
 func router(neoConnection neoutils.NeoConnection) *mux.Router {
-
 	healthHandler := v1a.Handler("ft-content-collection_rw_neo4j ServiceModule", "Writes 'content' to Neo4j, usually as part of a bulk upload done on a schedule", makeCheck(neoConnection))
-	neoHandler := collection.NewNeoHttpHandler(neoConnection)
 
 	m := mux.NewRouter()
 
 	gtgChecker := make([]gtg.StatusChecker, 0)
 
-	storyHandler := collection.NewContentCollectionHttpHandler(neoHandler, "StoryPackage")
+	storyHandler := collection.NewNeoHttpHandler(neoConnection, "StoryPackage")
 	m.HandleFunc("/content-collection/story-package/__count", storyHandler.CountHandler).Methods("GET")
 	m.HandleFunc("/content-collection/story-package/{uuid}", storyHandler.GetHandler).Methods("GET")
 	m.HandleFunc("/content-collection/story-package/{uuid}", storyHandler.PutHandler).Methods("PUT")
 	m.HandleFunc("/content-collection/story-package/{uuid}", storyHandler.DeleteHandler).Methods("DELETE")
-	contentHandler := collection.NewContentCollectionHttpHandler(neoHandler, "ContentPackage")
+	
+	contentHandler := collection.NewNeoHttpHandler(neoConnection, "ContentPackage")
 	m.HandleFunc("/content-collection/content-package/__count", contentHandler.CountHandler).Methods("GET")
 	m.HandleFunc("/content-collection/content-package/{uuid}", contentHandler.GetHandler).Methods("GET")
 	m.HandleFunc("/content-collection/content-package/{uuid}", contentHandler.PutHandler).Methods("PUT")

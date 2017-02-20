@@ -22,7 +22,7 @@ type service struct {
 }
 
 //instantiate service
-func NewHttpHandler(cypherRunner neoutils.NeoConnection) Service {
+func NewContentCollectionService(cypherRunner neoutils.NeoConnection) service {
 	return service{cypherRunner}
 }
 

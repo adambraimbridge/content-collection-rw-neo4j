@@ -1,36 +1,36 @@
 package collection
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"compress/gzip"
-	"io"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	"github.com/Financial-Times/up-rw-app-api-go/rwapi"
 	"github.com/gorilla/mux"
+	"io"
+	"net/http"
 )
 
-
 type NeoHttpHandler interface {
-	PutHandler(w http.ResponseWriter, req *http.Request, collectionType string)
+	PutHandler(w http.ResponseWriter, req *http.Request)
 	DeleteHandler(w http.ResponseWriter, req *http.Request)
-	GetHandler(w http.ResponseWriter, req *http.Request, collectionType string)
-	CountHandler(w http.ResponseWriter, r *http.Request, collectionType string)
+	GetHandler(w http.ResponseWriter, req *http.Request)
+	CountHandler(w http.ResponseWriter, r *http.Request)
 }
-
 
 type handler struct {
-	s Service
+	s              Service
+	collectionType string
 }
 
-func NewNeoHttpHandler(cypherRunner neoutils.NeoConnection) NeoHttpHandler {
-	service := NewHttpHandler(cypherRunner)
-	service.Initialise()
-	return &handler{service}
+func NewNeoHttpHandler(cypherRunner neoutils.NeoConnection, collectionType string) NeoHttpHandler {
+	newService := NewContentCollectionService(cypherRunner)
+	newService.Initialise()
+
+	return &handler{newService, collectionType}
 }
 
-func (hh *handler) PutHandler(w http.ResponseWriter, req *http.Request, collectionType string) {
+func (hh *handler) PutHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	uuid := vars["uuid"]
 
@@ -60,7 +60,7 @@ func (hh *handler) PutHandler(w http.ResponseWriter, req *http.Request, collecti
 		return
 	}
 
-	err = hh.s.Write(inst, collectionType)
+	err = hh.s.Write(inst, hh.collectionType)
 
 	if err != nil {
 		switch e := err.(type) {
@@ -106,11 +106,11 @@ func (hh *handler) DeleteHandler(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (hh *handler) GetHandler(w http.ResponseWriter, req *http.Request, collectionType string) {
+func (hh *handler) GetHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	uuid := vars["uuid"]
 
-	obj, found, err := hh.s.Read(uuid, collectionType)
+	obj, found, err := hh.s.Read(uuid, hh.collectionType)
 
 	w.Header().Add("Content-Type", "application/json")
 
@@ -131,9 +131,9 @@ func (hh *handler) GetHandler(w http.ResponseWriter, req *http.Request, collecti
 	}
 }
 
-func (hh *handler) CountHandler(w http.ResponseWriter, r *http.Request, collectionType string) {
+func (hh *handler) CountHandler(w http.ResponseWriter, r *http.Request) {
 
-	count, err := hh.s.Count(collectionType)
+	count, err := hh.s.Count(hh.collectionType)
 
 	w.Header().Add("Content-Type", "application/json")
 
@@ -154,4 +154,3 @@ func writeJSONError(w http.ResponseWriter, errorMsg string, statusCode int) {
 	w.WriteHeader(statusCode)
 	fmt.Fprintln(w, fmt.Sprintf("{\"message\": \"%s\"}", errorMsg))
 }
-
