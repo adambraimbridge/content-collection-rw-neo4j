@@ -117,13 +117,13 @@ func router(neoConnection neoutils.NeoConnection) *mux.Router {
 
 	gtgChecker := make([]gtg.StatusChecker, 0)
 
-	storyHandler := collection.NewNeoHttpHandler(neoConnection, "StoryPackage")
+	storyHandler := collection.NewNeoHttpHandler(neoConnection, "StoryPackage", "SELECTS")
 	m.HandleFunc("/content-collection/story-package/__count", storyHandler.CountHandler).Methods("GET")
 	m.HandleFunc("/content-collection/story-package/{uuid}", storyHandler.GetHandler).Methods("GET")
 	m.HandleFunc("/content-collection/story-package/{uuid}", storyHandler.PutHandler).Methods("PUT")
 	m.HandleFunc("/content-collection/story-package/{uuid}", storyHandler.DeleteHandler).Methods("DELETE")
 
-	contentHandler := collection.NewNeoHttpHandler(neoConnection, "ContentPackage")
+	contentHandler := collection.NewNeoHttpHandler(neoConnection, "ContentPackage", "CONTAINS")
 	m.HandleFunc("/content-collection/content-package/__count", contentHandler.CountHandler).Methods("GET")
 	m.HandleFunc("/content-collection/content-package/{uuid}", contentHandler.GetHandler).Methods("GET")
 	m.HandleFunc("/content-collection/content-package/{uuid}", contentHandler.PutHandler).Methods("PUT")

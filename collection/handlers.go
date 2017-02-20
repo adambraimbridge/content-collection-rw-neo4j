@@ -21,13 +21,14 @@ type NeoHttpHandler interface {
 type handler struct {
 	s              Service
 	collectionType string
+	relationType string
 }
 
-func NewNeoHttpHandler(cypherRunner neoutils.NeoConnection, collectionType string) NeoHttpHandler {
+func NewNeoHttpHandler(cypherRunner neoutils.NeoConnection, collectionType string, relationType string) NeoHttpHandler {
 	newService := NewContentCollectionService(cypherRunner)
 	newService.Initialise()
 
-	return &handler{newService, collectionType}
+	return &handler{newService, collectionType, relationType}
 }
 
 func (hh *handler) PutHandler(w http.ResponseWriter, req *http.Request) {
@@ -60,7 +61,7 @@ func (hh *handler) PutHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = hh.s.Write(inst, hh.collectionType)
+	err = hh.s.Write(inst, hh.collectionType, hh.relationType)
 
 	if err != nil {
 		switch e := err.(type) {
@@ -92,7 +93,7 @@ func (hh *handler) DeleteHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	uuid := vars["uuid"]
 
-	deleted, err := hh.s.Delete(uuid)
+	deleted, err := hh.s.Delete(uuid, hh.relationType)
 
 	if err != nil {
 		writeJSONError(w, err.Error(), http.StatusServiceUnavailable)
@@ -110,7 +111,7 @@ func (hh *handler) GetHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	uuid := vars["uuid"]
 
-	obj, found, err := hh.s.Read(uuid, hh.collectionType)
+	obj, found, err := hh.s.Read(uuid, hh.collectionType, hh.relationType)
 
 	w.Header().Add("Content-Type", "application/json")
 

@@ -5,12 +5,13 @@ import (
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	//	log "github.com/Sirupsen/logrus"
 	"github.com/jmcvetta/neoism"
+	"fmt"
 )
 
 type Service interface {
-	Write(thing interface{}, collectionType string) error
-	Read(uuid string, collectionType string) (thing interface{}, found bool, err error)
-	Delete(uuid string) (found bool, err error)
+	Write(thing interface{}, collectionType string, relationType string) error
+	Read(uuid string, collectionType string, relationType string) (thing interface{}, found bool, err error)
+	Delete(uuid string, relationType string) (found bool, err error)
 	DecodeJSON(*json.Decoder) (thing interface{}, identity string, err error)
 	Count(collectionType string) (int, error)
 	Check() error
@@ -46,17 +47,17 @@ func (pcd service) Check() error {
 }
 
 // Read - reads a content collection given a UUID
-func (pcd service) Read(uuid string, collectionType string) (interface{}, bool, error) {
+func (pcd service) Read(uuid string, collectionType string, relationType string) (interface{}, bool, error) {
 	results := []struct {
 		contentCollection
 	}{}
 
 	query := &neoism.CypherQuery{
-		Statement: `MATCH (n {uuid:{uuid}}) WHERE {label} IN labels(n)
-				OPTIONAL MATCH (n)-[rel:SELECTS]->(t:Thing)
+		Statement: fmt.Sprintf(`MATCH (n {uuid:{uuid}}) WHERE {label} IN labels(n)
+				OPTIONAL MATCH (n)-[rel:%s]->(t:Thing)
 				WITH n, rel, t
 				ORDER BY rel.order
-				RETURN n.uuid as uuid, n.publishReference as publishReference, n.lastModified as lastModified, collect({uuid:t.uuid}) as items`,
+				RETURN n.uuid as uuid, n.publishReference as publishReference, n.lastModified as lastModified, collect({uuid:t.uuid}) as items`, relationType),
 		Parameters: map[string]interface{}{
 			"label": collectionType,
 			"uuid":  uuid,
@@ -90,13 +91,13 @@ func (pcd service) Read(uuid string, collectionType string) (interface{}, bool, 
 }
 
 //Write - Writes a content collection node
-func (pcd service) Write(thing interface{}, collectionType string) error {
+func (pcd service) Write(thing interface{}, collectionType string, relationType string) error {
 	newContentCollection := thing.(contentCollection)
 
 	deleteRelationshipsQuery := &neoism.CypherQuery{
-		Statement: `MATCH (n:Thing {uuid: {uuid}})
-			MATCH (item:Thing)<-[rel:SELECTS]-(n) 
-			DELETE rel`,
+		Statement: fmt.Sprintf(`MATCH (n:Thing {uuid: {uuid}})
+			MATCH (item:Thing)<-[rel:%s]-(n)
+			DELETE rel`, relationType),
 		Parameters: map[string]interface{}{
 			"uuid": newContentCollection.UUID,
 		},
@@ -121,18 +122,18 @@ func (pcd service) Write(thing interface{}, collectionType string) error {
 	queries := []*neoism.CypherQuery{deleteRelationshipsQuery, writeContentCollectionQuery}
 
 	for i, item := range newContentCollection.Items {
-		addItemQuery := addStoryPackageItemQuery(collectionType, newContentCollection.UUID, item.UUID, i+1)
+		addItemQuery := addStoryPackageItemQuery(collectionType, relationType, newContentCollection.UUID, item.UUID, i + 1)
 		queries = append(queries, addItemQuery)
 	}
 
 	return pcd.conn.CypherBatch(queries)
 }
 
-func addStoryPackageItemQuery(contentCollectionType string, contentCollectionUuid string, itemUuid string, order int) *neoism.CypherQuery {
+func addStoryPackageItemQuery(contentCollectionType string, relationType string, contentCollectionUuid string, itemUuid string, order int) *neoism.CypherQuery {
 	query := &neoism.CypherQuery{
-		Statement: `MATCH (n {uuid:{contentCollectionUuid}}) WHERE {label} IN labels(n)
+		Statement: fmt.Sprintf(`MATCH (n {uuid:{contentCollectionUuid}}) WHERE {label} IN labels(n)
 			MERGE (content:Thing {uuid: {contentUuid}})
-			MERGE (n)-[rel:SELECTS {order: {itemOrder}}]->(content)`,
+			MERGE (n)-[rel:%s {order: {itemOrder}}]->(content)`, relationType),
 		Parameters: map[string]interface{}{
 			"label":                 contentCollectionType,
 			"contentCollectionUuid": contentCollectionUuid,
@@ -145,13 +146,13 @@ func addStoryPackageItemQuery(contentCollectionType string, contentCollectionUui
 }
 
 //Delete - Deletes a content collection
-func (pcd service) Delete(uuid string) (bool, error) {
+func (pcd service) Delete(uuid string, relationType string) (bool, error) {
 	removeRelationships := &neoism.CypherQuery{
-		Statement: `MATCH (n:Thing {uuid: {uuid}})
-			OPTIONAL MATCH (item:Thing)<-[rel:SELECTS]-(n)
-			DELETE rel`,
+		Statement: fmt.Sprintf(`MATCH (n:Thing {uuid: {uuid}})
+			OPTIONAL MATCH (item:Thing)<-[rel:%s]-(n)
+			DELETE rel`, relationType),
 		Parameters: map[string]interface{}{
-			"uuid": uuid,
+			"uuid":         uuid,
 		},
 	}
 

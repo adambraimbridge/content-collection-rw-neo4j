@@ -14,6 +14,7 @@ import (
 const (
 	storyPackageCollectionType = "StoryPackage"
 	storyPackageUuid           = "sp-12345"
+	storyRelationType = "SELECTS"
 )
 
 type curationResult struct{ curation contentCollection }
@@ -25,7 +26,7 @@ func TestRead404NotFound(t *testing.T) {
 	testService := getContentCollectionService(db)
 	defer cleanDB(db, t, assert)
 
-	result, found, err := testService.Read(storyPackageUuid, storyPackageCollectionType)
+	result, found, err := testService.Read(storyPackageUuid, storyPackageCollectionType, storyRelationType)
 	foundContentCollection := result.(contentCollection)
 
 	assert.NoError(err)
@@ -41,7 +42,7 @@ func TestWriteSuccessfully(t *testing.T) {
 
 	contentCollectionReceived := createStoryPackageWithItems()
 
-	err := testService.Write(contentCollectionReceived, storyPackageCollectionType)
+	err := testService.Write(contentCollectionReceived, storyPackageCollectionType, storyRelationType)
 	assert.NoError(err)
 
 	result, err1 := getCurationByUuid(storyPackageUuid, testService)
@@ -61,11 +62,11 @@ func TestUpdateItemsForStoryPackage(t *testing.T) {
 
 	contentCollectionReceived := createStoryPackageWithItems()
 
-	err := testService.Write(contentCollectionReceived, storyPackageCollectionType)
+	err := testService.Write(contentCollectionReceived, storyPackageCollectionType, storyRelationType)
 	assert.NoError(err)
 
 	contentCollectionReceived.Items = append(contentCollectionReceived.Items, item{UUID: "item3"})
-	updateErr := testService.Write(contentCollectionReceived, storyPackageCollectionType)
+	updateErr := testService.Write(contentCollectionReceived, storyPackageCollectionType, storyRelationType)
 	result, err1 := getCurationByUuid(storyPackageUuid, testService)
 	itemResult, err2 := getCurationItemsById(storyPackageUuid, testService)
 
@@ -83,10 +84,10 @@ func TestDeleteStoryPackageWithItems(t *testing.T) {
 	defer cleanDB(db, t, assert)
 
 	contentCollectionReceived := createStoryPackageWithItems()
-	err := testService.Write(contentCollectionReceived, storyPackageCollectionType)
+	err := testService.Write(contentCollectionReceived, storyPackageCollectionType, storyRelationType)
 	assert.NoError(err)
 
-	deleted, err := testService.Delete(contentCollectionReceived.UUID)
+	deleted, err := testService.Delete(contentCollectionReceived.UUID, storyRelationType)
 
 	assert.NoError(err)
 	assert.Equal(true, deleted)
