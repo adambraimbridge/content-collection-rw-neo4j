@@ -1,6 +1,6 @@
 FROM alpine:3.4
 
-ARG PROJECT=story-package-rw-neo4j
+ARG PROJECT=content-collection-rw-neo4j
 
 ADD . /${PROJECT}/
 
@@ -30,4 +30,4 @@ RUN apk add --no-cache bash \
   && apk del .build-dependencies \
   && rm -rf $GOPATH /var/cache/apk/*
 
-CMD [ "/story-package-rw-neo4j" ]
+CMD [ "/content-collection-rw-neo4j" ]
