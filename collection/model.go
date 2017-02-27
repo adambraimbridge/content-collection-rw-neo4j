@@ -4,7 +4,7 @@ type contentCollection struct {
 	UUID             string `json:"uuid"`
 	Items            []item `json:"items,omitempty"`
 	PublishReference string `json:"publishReference"`
-	LastModified     int64  `json:"lastModified"`
+	LastModified     string `json:"lastModified"`
 }
 
 type item struct {

@@ -2,13 +2,11 @@ package collection
 
 import (
 	"fmt"
-	"os"
-	"testing"
-
-	//	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	"github.com/jmcvetta/neoism"
 	"github.com/stretchr/testify/assert"
+	"os"
+	"testing"
 )
 
 const (
@@ -23,7 +21,7 @@ func TestRead404NotFound(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
 	testService := getContentCollectionService(db)
-	defer cleanDB(db, t, assert)
+	defer cleanDB(db, assert)
 
 	result, found, err := testService.Read(storyPackageUuid, storyPackageCollectionType)
 	foundContentCollection := result.(contentCollection)
@@ -37,7 +35,7 @@ func TestWriteSuccessfully(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
 	testService := getContentCollectionService(db)
-	defer cleanDB(db, t, assert)
+	defer cleanDB(db, assert)
 
 	contentCollectionReceived := createStoryPackageWithItems()
 
@@ -57,7 +55,7 @@ func TestUpdateItemsForStoryPackage(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
 	testService := getContentCollectionService(db)
-	defer cleanDB(db, t, assert)
+	defer cleanDB(db, assert)
 
 	contentCollectionReceived := createStoryPackageWithItems()
 
@@ -80,7 +78,7 @@ func TestDeleteStoryPackageWithItems(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
 	testService := getContentCollectionService(db)
-	defer cleanDB(db, t, assert)
+	defer cleanDB(db, assert)
 
 	contentCollectionReceived := createStoryPackageWithItems()
 	err := testService.Write(contentCollectionReceived, storyPackageCollectionType)
@@ -99,7 +97,7 @@ func createStoryPackageWithItems() contentCollection {
 	c := contentCollection{
 		UUID:             storyPackageUuid,
 		PublishReference: "test12345",
-		LastModified:     1485876801687,
+		LastModified:     "2016-08-25T06:06:23.532Z",
 		Items:            []item{item1, item2},
 	}
 
@@ -126,7 +124,7 @@ func getCurationItemsById(uuid string, s service) ([]curationItem, error) {
 	query := &neoism.CypherQuery{
 		Statement: `MATCH (n:Curation {uuid:{uuid}})-[rel:SELECTS]->(t:Thing) RETURN t`,
 		Parameters: map[string]interface{}{
-			"uuid": storyPackageUuid,
+			"uuid": uuid,
 		},
 		Result: &itemResult,
 	}
@@ -137,7 +135,7 @@ func getCurationItemsById(uuid string, s service) ([]curationItem, error) {
 
 func getDatabaseConnectionAndCheckClean(t *testing.T, assert *assert.Assertions) neoutils.NeoConnection {
 	db := getDatabaseConnection(assert)
-	cleanDB(db, t, assert)
+	cleanDB(db, assert)
 	checkDbClean(db, t)
 	return db
 }
@@ -155,7 +153,7 @@ func getDatabaseConnection(assert *assert.Assertions) neoutils.NeoConnection {
 	return db
 }
 
-func cleanDB(db neoutils.CypherRunner, t *testing.T, assert *assert.Assertions) {
+func cleanDB(db neoutils.CypherRunner, assert *assert.Assertions) {
 	qs := []*neoism.CypherQuery{
 		{
 			Statement: fmt.Sprintf("MATCH (mc:Thing {uuid: '%v'}) DETACH DELETE mc", storyPackageUuid),

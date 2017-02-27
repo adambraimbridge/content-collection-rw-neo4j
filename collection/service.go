@@ -2,8 +2,8 @@ package collection
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
-	//	log "github.com/Sirupsen/logrus"
 	"github.com/jmcvetta/neoism"
 )
 
@@ -52,14 +52,13 @@ func (pcd service) Read(uuid string, collectionType string) (interface{}, bool, 
 	}{}
 
 	query := &neoism.CypherQuery{
-		Statement: `MATCH (n {uuid:{uuid}}) WHERE {label} IN labels(n)
+		Statement: fmt.Sprintf(`MATCH (n:%s {uuid:{uuid}})
 				OPTIONAL MATCH (n)-[rel:SELECTS]->(t:Thing)
 				WITH n, rel, t
 				ORDER BY rel.order
-				RETURN n.uuid as uuid, n.publishReference as publishReference, n.lastModified as lastModified, collect({uuid:t.uuid}) as items`,
+				RETURN n.uuid as uuid, n.publishReference as publishReference, n.lastModified as lastModified, collect({uuid:t.uuid}) as items`, collectionType),
 		Parameters: map[string]interface{}{
-			"label": collectionType,
-			"uuid":  uuid,
+			"uuid": uuid,
 		},
 		Result: &results,
 	}
@@ -130,11 +129,10 @@ func (pcd service) Write(thing interface{}, collectionType string) error {
 
 func addStoryPackageItemQuery(contentCollectionType string, contentCollectionUuid string, itemUuid string, order int) *neoism.CypherQuery {
 	query := &neoism.CypherQuery{
-		Statement: `MATCH (n {uuid:{contentCollectionUuid}}) WHERE {label} IN labels(n)
+		Statement: fmt.Sprintf(`MATCH (n:%s {uuid:{contentCollectionUuid}})
 			MERGE (content:Thing {uuid: {contentUuid}})
-			MERGE (n)-[rel:SELECTS {order: {itemOrder}}]->(content)`,
+			MERGE (n)-[rel:SELECTS {order: {itemOrder}}]->(content)`, contentCollectionType),
 		Parameters: map[string]interface{}{
-			"label":                 contentCollectionType,
 			"contentCollectionUuid": contentCollectionUuid,
 			"contentUuid":           itemUuid,
 			"itemOrder":             order,
@@ -193,11 +191,8 @@ func (pcd service) Count(collectionType string) (int, error) {
 	}{}
 
 	query := &neoism.CypherQuery{
-		Statement: `MATCH (n) WHERE {label} IN labels(n) RETURN count(n) as c`,
-		Parameters: map[string]interface{}{
-			"label": collectionType,
-		},
-		Result: &results,
+		Statement: fmt.Sprintf(`MATCH (n:%s) RETURN count(n) as c`, collectionType),
+		Result:    &results,
 	}
 
 	err := pcd.conn.CypherBatch([]*neoism.CypherQuery{query})
