@@ -9,6 +9,8 @@ import (
 	"github.com/gorilla/mux"
 	"io"
 	"net/http"
+	log "github.com/Sirupsen/logrus"
+	tid "github.com/Financial-Times/transactionid-utils-go"
 )
 
 type NeoHttpHandler interface {
@@ -19,9 +21,9 @@ type NeoHttpHandler interface {
 }
 
 type handler struct {
-	s              Service
-	collectionType string
-	relationType string
+	s              	Service
+	collectionType 	string
+	relationType 	string
 }
 
 func NewNeoHttpHandler(cypherRunner neoutils.NeoConnection, collectionType string, relationType string) NeoHttpHandler {
@@ -41,7 +43,7 @@ func (hh *handler) PutHandler(w http.ResponseWriter, req *http.Request) {
 	if req.Header.Get("Content-Encoding") == "gzip" {
 		unzipped, err := gzip.NewReader(req.Body)
 		if err != nil {
-			writeJSONError(w, err.Error(), http.StatusBadRequest)
+			writeJSONError(w, err.Error(), http.StatusBadRequest, req, uuid)
 			return
 		}
 		defer unzipped.Close()
@@ -52,12 +54,12 @@ func (hh *handler) PutHandler(w http.ResponseWriter, req *http.Request) {
 	inst, docUUID, err := hh.s.DecodeJSON(dec)
 
 	if err != nil {
-		writeJSONError(w, err.Error(), http.StatusBadRequest)
+		writeJSONError(w, err.Error(), http.StatusBadRequest, req, uuid)
 		return
 	}
 
 	if docUUID != uuid {
-		writeJSONError(w, fmt.Sprintf("uuid does not match: '%v' '%v'", docUUID, uuid), http.StatusBadRequest)
+		writeJSONError(w, fmt.Sprintf("uuid does not match: '%v' '%v'", docUUID, uuid), http.StatusBadRequest, req, uuid)
 		return
 	}
 
@@ -66,22 +68,22 @@ func (hh *handler) PutHandler(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		switch e := err.(type) {
 		case noContentReturnedError:
-			writeJSONError(w, e.NoContentReturnedDetails(), http.StatusNoContent)
+			writeJSONError(w, e.NoContentReturnedDetails(), http.StatusNoContent, req, uuid)
 			return
 		case *neoutils.ConstraintViolationError:
 			// TODO: remove neo specific error check once all apps are
 			// updated to use neoutils.Connect() because that maps errors
 			// to rwapi.ConstraintOrTransactionError
-			writeJSONError(w, e.Error(), http.StatusConflict)
+			writeJSONError(w, e.Error(), http.StatusConflict, req, uuid)
 			return
 		case rwapi.ConstraintOrTransactionError:
-			writeJSONError(w, e.Error(), http.StatusConflict)
+			writeJSONError(w, e.Error(), http.StatusConflict, req, uuid)
 			return
 		case invalidRequestError:
-			writeJSONError(w, e.InvalidRequestDetails(), http.StatusBadRequest)
+			writeJSONError(w, e.InvalidRequestDetails(), http.StatusBadRequest, req, uuid)
 			return
 		default:
-			writeJSONError(w, err.Error(), http.StatusServiceUnavailable)
+			writeJSONError(w, err.Error(), http.StatusServiceUnavailable, req, uuid)
 			return
 		}
 	}
@@ -96,7 +98,7 @@ func (hh *handler) DeleteHandler(w http.ResponseWriter, req *http.Request) {
 	deleted, err := hh.s.Delete(uuid, hh.relationType)
 
 	if err != nil {
-		writeJSONError(w, err.Error(), http.StatusServiceUnavailable)
+		writeJSONError(w, err.Error(), http.StatusServiceUnavailable, req, uuid)
 		return
 	}
 
@@ -116,7 +118,7 @@ func (hh *handler) GetHandler(w http.ResponseWriter, req *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 
 	if err != nil {
-		writeJSONError(w, err.Error(), http.StatusServiceUnavailable)
+		writeJSONError(w, err.Error(), http.StatusServiceUnavailable, req, uuid)
 		return
 	}
 
@@ -127,7 +129,7 @@ func (hh *handler) GetHandler(w http.ResponseWriter, req *http.Request) {
 
 	enc := json.NewEncoder(w)
 	if err := enc.Encode(obj); err != nil {
-		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		writeJSONError(w, err.Error(), http.StatusInternalServerError, req, uuid)
 		return
 	}
 }
@@ -139,19 +141,27 @@ func (hh *handler) CountHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 
 	if err != nil {
-		writeJSONError(w, err.Error(), http.StatusServiceUnavailable)
+		writeJSONError(w, err.Error(), http.StatusServiceUnavailable, r, "N/A")
 		return
 	}
 
 	enc := json.NewEncoder(w)
 
 	if err := enc.Encode(count); err != nil {
-		writeJSONError(w, err.Error(), http.StatusServiceUnavailable)
+		writeJSONError(w, err.Error(), http.StatusServiceUnavailable, r, "N/A")
 		return
 	}
 }
 
-func writeJSONError(w http.ResponseWriter, errorMsg string, statusCode int) {
+func writeJSONError(w http.ResponseWriter, errorMsg string, statusCode int, req *http.Request, uuid string) {
+	log.WithFields(log.Fields{
+		"event":          "error",
+		"request_url":    req.URL.String(),
+		"transaction_id": req.Header.Get(tid.TransactionIDHeader),
+		"status":         statusCode,
+		"uuid":           uuid,
+	}).Error(errorMsg)
+
 	w.WriteHeader(statusCode)
 	fmt.Fprintln(w, fmt.Sprintf("{\"message\": \"%s\"}", errorMsg))
 }
