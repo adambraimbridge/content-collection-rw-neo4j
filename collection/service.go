@@ -2,10 +2,9 @@ package collection
 
 import (
 	"encoding/json"
-	"github.com/Financial-Times/neo-utils-go/neoutils"
-	//	log "github.com/Sirupsen/logrus"
-	"github.com/jmcvetta/neoism"
 	"fmt"
+	"github.com/Financial-Times/neo-utils-go/neoutils"
+	"github.com/jmcvetta/neoism"
 )
 
 type Service interface {
@@ -53,14 +52,13 @@ func (pcd service) Read(uuid string, collectionType string, relationType string)
 	}{}
 
 	query := &neoism.CypherQuery{
-		Statement: fmt.Sprintf(`MATCH (n {uuid:{uuid}}) WHERE {label} IN labels(n)
+		Statement: fmt.Sprintf(`MATCH (n:%s {uuid:{uuid}})
 				OPTIONAL MATCH (n)-[rel:%s]->(t:Thing)
 				WITH n, rel, t
 				ORDER BY rel.order
-				RETURN n.uuid as uuid, n.publishReference as publishReference, n.lastModified as lastModified, collect({uuid:t.uuid}) as items`, relationType),
+				RETURN n.uuid as uuid, n.publishReference as publishReference, n.lastModified as lastModified, collect({uuid:t.uuid}) as items`, collectionType, relationType),
 		Parameters: map[string]interface{}{
-			"label": collectionType,
-			"uuid":  uuid,
+			"uuid": uuid,
 		},
 		Result: &results,
 	}
@@ -131,11 +129,10 @@ func (pcd service) Write(thing interface{}, collectionType string, relationType 
 
 func addStoryPackageItemQuery(contentCollectionType string, relationType string, contentCollectionUuid string, itemUuid string, order int) *neoism.CypherQuery {
 	query := &neoism.CypherQuery{
-		Statement: fmt.Sprintf(`MATCH (n {uuid:{contentCollectionUuid}}) WHERE {label} IN labels(n)
+		Statement: fmt.Sprintf(`MATCH (n:%s {uuid:{contentCollectionUuid}})
 			MERGE (content:Thing {uuid: {contentUuid}})
-			MERGE (n)-[rel:%s {order: {itemOrder}}]->(content)`, relationType),
+			MERGE (n)-[rel:%s {order: {itemOrder}}]->(content)`, contentCollectionType, relationType),
 		Parameters: map[string]interface{}{
-			"label":                 contentCollectionType,
 			"contentCollectionUuid": contentCollectionUuid,
 			"contentUuid":           itemUuid,
 			"itemOrder":             order,
@@ -194,11 +191,8 @@ func (pcd service) Count(collectionType string) (int, error) {
 	}{}
 
 	query := &neoism.CypherQuery{
-		Statement: `MATCH (n) WHERE {label} IN labels(n) RETURN count(n) as c`,
-		Parameters: map[string]interface{}{
-			"label": collectionType,
-		},
-		Result: &results,
+		Statement: fmt.Sprintf(`MATCH (n:%s) RETURN count(n) as c`, collectionType),
+		Result:    &results,
 	}
 
 	err := pcd.conn.CypherBatch([]*neoism.CypherQuery{query})

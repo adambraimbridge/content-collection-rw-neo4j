@@ -21,4 +21,4 @@ test:
       echo "mode: atomic" > $CIRCLE_ARTIFACTS/overall-coverage.result
     - cd $CIRCLE_ARTIFACTS && cat *.out >> overall-coverage.result
   post:
-- goveralls -coverprofile=$CIRCLE_ARTIFACTS/overall-coverage.result -service=circle-ci -repotoken=$COVERALLS_TOKEN
+    - goveralls -coverprofile=$CIRCLE_ARTIFACTS/overall-coverage.result -service=circle-ci -repotoken=$COVERALLS_TOKEN

@@ -63,12 +63,6 @@ func main() {
 		EnvVar: "LOG_METRICS",
 	})
 
-	env := app.String(cli.StringOpt{
-		Name:  "env",
-		Value: "local",
-		Desc:  "environment this app is running in",
-	})
-
 	app.Action = func() {
 		conf := neoutils.DefaultConnectionConfig()
 		conf.BatchSize = *batchSize
@@ -79,17 +73,6 @@ func main() {
 		}
 
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
-
-		if *env != "local" {
-			f, err := os.OpenFile("/var/log/apps/content-collection-rw-neo4j-go-app.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
-			if err == nil {
-				log.SetOutput(f)
-				log.SetFormatter(&log.TextFormatter{DisableColors: true})
-			} else {
-				log.Fatalf("Failed to initialise log file, %v", err)
-			}
-			defer f.Close()
-		}
 
 		var m http.Handler
 		m = router(db)
@@ -147,8 +130,8 @@ func router(neoConnection neoutils.NeoConnection) *mux.Router {
 func makeCheck(cr neoutils.CypherRunner) v1a.Check {
 	return v1a.Check{
 		BusinessImpact:   "Cannot read/write content via this writer",
-		Name:             "Check connectivity to Neo4j - neoUrl is a parameter in hieradata for this service",
-		PanicGuide:       "TODO - write panic guide",
+		Name:             "Check connectivity to Neo4j",
+		PanicGuide:       "https://dewey.ft.com/upp-content-collection-rw-neo4j.html",
 		Severity:         1,
 		TechnicalSummary: fmt.Sprintf("Cannot connect to Neo4j instance %s with something written to it", cr),
 		Checker:          func() (string, error) { return "", neoutils.Check(cr) },
