@@ -15,123 +15,83 @@ const (
 	relationType = "SELECTS"
 )
 
-type curationResult struct{ curation contentCollection }
-type curationItem struct{ cItem item }
-
-func TestReadNotFound(t *testing.T) {
+func TestWrite(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
 	testService := getContentCollectionService(db)
 	defer cleanDB(db, assert)
 
-	result, found, err := testService.Read(uuid, collectionType, relationType)
-	foundContentCollection := result.(contentCollection)
-
+	err := testService.Write(createContentCollection(2), collectionType, relationType)
 	assert.NoError(err)
-	assert.Equal("", foundContentCollection.UUID, "Result shouldn't exist in DB")
-	assert.Equal(false, found, "Resuld should not be found in DB")
+
+	result, found, err := testService.Read(uuid, collectionType, relationType);
+	validateResult(assert, result, found, err, 2)
 }
 
-func TestWriteSuccess(t *testing.T) {
+func TestUpdate(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
 	testService := getContentCollectionService(db)
 	defer cleanDB(db, assert)
 
-	contentCollectionReceived := createContentCollection()
-
-	err := testService.Write(contentCollectionReceived, collectionType, relationType)
+	err := testService.Write(createContentCollection(2), collectionType, relationType)
 	assert.NoError(err)
 
-	result, err1 := getCurationByUuid(uuid, testService)
-	itemResult, err2 := getCurationItemsById(uuid, testService)
+	result, found, err := testService.Read(uuid, collectionType, relationType);
+	validateResult(assert, result, found, err, 2)
 
-	assert.NoError(err1)
-	assert.NoError(err2)
-	assert.Equal(1, len(result), "Result should have size=2")
-	assert.Equal(2, len(itemResult), "Items should have size=2")
+	err = testService.Write(createContentCollection(3), collectionType, relationType)
+	assert.NoError(err)
+
+	result, found, err = testService.Read(uuid, collectionType, relationType);
+	validateResult(assert, result, found, err, 3)
 }
 
-func TestUpdateSuccess(t *testing.T) {
+func TestDelete(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
 	testService := getContentCollectionService(db)
 	defer cleanDB(db, assert)
 
-	contentCollectionReceived := createContentCollection()
-
-	err := testService.Write(contentCollectionReceived, collectionType, relationType)
+	err := testService.Write(createContentCollection(2), collectionType, relationType)
 	assert.NoError(err)
 
-	contentCollectionReceived.Items = append(contentCollectionReceived.Items, item{UUID: "item3"})
-	updateErr := testService.Write(contentCollectionReceived, collectionType, relationType)
-	result, err1 := getCurationByUuid(uuid, testService)
-	itemResult, err2 := getCurationItemsById(uuid, testService)
+	result, found, err := testService.Read(uuid, collectionType, relationType);
+	validateResult(assert, result, found, err, 2)
 
-	assert.NoError(err1)
-	assert.NoError(err2)
-	assert.NoError(updateErr)
-	assert.Equal(1, len(result), "Result should have size=1")
-	assert.Equal(3, len(itemResult), "Items should have size=3")
-}
-
-func TestDeleteSuccess(t *testing.T) {
-	assert := assert.New(t)
-	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db)
-	defer cleanDB(db, assert)
-
-	contentCollectionReceived := createContentCollection()
-	err := testService.Write(contentCollectionReceived, collectionType, relationType)
-	assert.NoError(err)
-
-	deleted, err := testService.Delete(contentCollectionReceived.UUID, relationType)
-
+	deleted, err := testService.Delete(uuid, relationType)
 	assert.NoError(err)
 	assert.Equal(true, deleted)
+
+	result, found, err = testService.Read(uuid, collectionType, relationType);
+	assert.NoError(err)
+	assert.False(found)
+	assert.Equal(contentCollection{}, result.(contentCollection))
 }
 
-func createContentCollection() contentCollection {
-	item1 := item{UUID: "item1"}
-	item2 := item{UUID: "item2"}
+func createContentCollection(itemCount int) contentCollection {
+	items := []item {}
+	for count := 0; count < itemCount; count ++ {
+		items = append(items, item { fmt.Sprint("Item", count) } );
+	}
 
 	c := contentCollection{
 		UUID:             uuid,
 		PublishReference: "test12345",
 		LastModified:     "2016-08-25T06:06:23.532Z",
-		Items:            []item{item1, item2},
+		Items:            items,
 	}
 
 	return c
 }
 
-func getCurationByUuid(uuid string, s service) ([]curationResult, error) {
-	result := []curationResult{}
-	query := &neoism.CypherQuery{
-		Statement: `MATCH (n:Curation {uuid:{uuid}}) RETURN n`,
-		Parameters: map[string]interface{}{
-			"uuid": uuid,
-		},
-		Result: &result,
-	}
+func validateResult(assert *assert.Assertions, result interface{}, found bool, err error, itemCount int) {
+	assert.NoError(err);
+	assert.True(found);
 
-	err := s.conn.CypherBatch([]*neoism.CypherQuery{query})
-
-	return result, err
-}
-
-func getCurationItemsById(uuid string, s service) ([]curationItem, error) {
-	itemResult := []curationItem{}
-	query := &neoism.CypherQuery{
-		Statement: `MATCH (n:Curation {uuid:{uuid}})-[rel:SELECTS]->(t:Thing) RETURN t`,
-		Parameters: map[string]interface{}{
-			"uuid": uuid,
-		},
-		Result: &itemResult,
-	}
-
-	err := s.conn.CypherBatch([]*neoism.CypherQuery{query})
-	return itemResult, err
+	collection := result.(contentCollection)
+	assert.Equal(uuid, collection.UUID)
+	assert.Equal(itemCount, len(collection.Items))
 }
 
 func getDatabaseConnectionAndCheckClean(t *testing.T, assert *assert.Assertions) neoutils.NeoConnection {
@@ -144,7 +104,7 @@ func getDatabaseConnectionAndCheckClean(t *testing.T, assert *assert.Assertions)
 func getDatabaseConnection(assert *assert.Assertions) neoutils.NeoConnection {
 	url := os.Getenv("NEO4J_TEST_URL")
 	if url == "" {
-		url = "http://localhost:7474/db/data"
+		url = "http://neo4j:foobar@localhost:7474/db/data"
 	}
 
 	conf := neoutils.DefaultConnectionConfig()
