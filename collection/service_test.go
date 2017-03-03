@@ -10,21 +10,21 @@ import (
 )
 
 const (
-	storyPackageCollectionType = "StoryPackage"
-	storyPackageUuid           = "sp-12345"
-	storyRelationType = "SELECTS"
+	uuid = "sp-12345"
+	collectionType = "StoryPackage"
+	relationType = "SELECTS"
 )
 
 type curationResult struct{ curation contentCollection }
 type curationItem struct{ cItem item }
 
-func TestRead404NotFound(t *testing.T) {
+func TestReadNotFound(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
 	testService := getContentCollectionService(db)
 	defer cleanDB(db, assert)
 
-	result, found, err := testService.Read(storyPackageUuid, storyPackageCollectionType, storyRelationType)
+	result, found, err := testService.Read(uuid, collectionType, relationType)
 	foundContentCollection := result.(contentCollection)
 
 	assert.NoError(err)
@@ -32,19 +32,19 @@ func TestRead404NotFound(t *testing.T) {
 	assert.Equal(false, found, "Resuld should not be found in DB")
 }
 
-func TestWriteSuccessfully(t *testing.T) {
+func TestWriteSuccess(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
 	testService := getContentCollectionService(db)
 	defer cleanDB(db, assert)
 
-	contentCollectionReceived := createStoryPackageWithItems()
+	contentCollectionReceived := createContentCollection()
 
-	err := testService.Write(contentCollectionReceived, storyPackageCollectionType, storyRelationType)
+	err := testService.Write(contentCollectionReceived, collectionType, relationType)
 	assert.NoError(err)
 
-	result, err1 := getCurationByUuid(storyPackageUuid, testService)
-	itemResult, err2 := getCurationItemsById(storyPackageUuid, testService)
+	result, err1 := getCurationByUuid(uuid, testService)
+	itemResult, err2 := getCurationItemsById(uuid, testService)
 
 	assert.NoError(err1)
 	assert.NoError(err2)
@@ -52,21 +52,21 @@ func TestWriteSuccessfully(t *testing.T) {
 	assert.Equal(2, len(itemResult), "Items should have size=2")
 }
 
-func TestUpdateItemsForStoryPackage(t *testing.T) {
+func TestUpdateSuccess(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
 	testService := getContentCollectionService(db)
 	defer cleanDB(db, assert)
 
-	contentCollectionReceived := createStoryPackageWithItems()
+	contentCollectionReceived := createContentCollection()
 
-	err := testService.Write(contentCollectionReceived, storyPackageCollectionType, storyRelationType)
+	err := testService.Write(contentCollectionReceived, collectionType, relationType)
 	assert.NoError(err)
 
 	contentCollectionReceived.Items = append(contentCollectionReceived.Items, item{UUID: "item3"})
-	updateErr := testService.Write(contentCollectionReceived, storyPackageCollectionType, storyRelationType)
-	result, err1 := getCurationByUuid(storyPackageUuid, testService)
-	itemResult, err2 := getCurationItemsById(storyPackageUuid, testService)
+	updateErr := testService.Write(contentCollectionReceived, collectionType, relationType)
+	result, err1 := getCurationByUuid(uuid, testService)
+	itemResult, err2 := getCurationItemsById(uuid, testService)
 
 	assert.NoError(err1)
 	assert.NoError(err2)
@@ -75,28 +75,28 @@ func TestUpdateItemsForStoryPackage(t *testing.T) {
 	assert.Equal(3, len(itemResult), "Items should have size=3")
 }
 
-func TestDeleteStoryPackageWithItems(t *testing.T) {
+func TestDeleteSuccess(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
 	testService := getContentCollectionService(db)
 	defer cleanDB(db, assert)
 
-	contentCollectionReceived := createStoryPackageWithItems()
-	err := testService.Write(contentCollectionReceived, storyPackageCollectionType, storyRelationType)
+	contentCollectionReceived := createContentCollection()
+	err := testService.Write(contentCollectionReceived, collectionType, relationType)
 	assert.NoError(err)
 
-	deleted, err := testService.Delete(contentCollectionReceived.UUID, storyRelationType)
+	deleted, err := testService.Delete(contentCollectionReceived.UUID, relationType)
 
 	assert.NoError(err)
 	assert.Equal(true, deleted)
 }
 
-func createStoryPackageWithItems() contentCollection {
+func createContentCollection() contentCollection {
 	item1 := item{UUID: "item1"}
 	item2 := item{UUID: "item2"}
 
 	c := contentCollection{
-		UUID:             storyPackageUuid,
+		UUID:             uuid,
 		PublishReference: "test12345",
 		LastModified:     "2016-08-25T06:06:23.532Z",
 		Items:            []item{item1, item2},
@@ -144,7 +144,7 @@ func getDatabaseConnectionAndCheckClean(t *testing.T, assert *assert.Assertions)
 func getDatabaseConnection(assert *assert.Assertions) neoutils.NeoConnection {
 	url := os.Getenv("NEO4J_TEST_URL")
 	if url == "" {
-		url = "http://localhost:7474/db/data"
+		url = "http://neo4j:foobar@localhost:7474/db/data"
 	}
 
 	conf := neoutils.DefaultConnectionConfig()
@@ -157,7 +157,7 @@ func getDatabaseConnection(assert *assert.Assertions) neoutils.NeoConnection {
 func cleanDB(db neoutils.CypherRunner, assert *assert.Assertions) {
 	qs := []*neoism.CypherQuery{
 		{
-			Statement: fmt.Sprintf("MATCH (mc:Thing {uuid: '%v'}) DETACH DELETE mc", storyPackageUuid),
+			Statement: fmt.Sprintf("MATCH (mc:Thing {uuid: '%v'}) DETACH DELETE mc", uuid),
 		},
 	}
 
@@ -175,7 +175,7 @@ func checkDbClean(db neoutils.CypherRunner, t *testing.T) {
 	checkGraph := neoism.CypherQuery{
 		Statement: `MATCH (org:Thing) WHERE org.uuid in {uuids} RETURN org.uuid`,
 		Parameters: neoism.Props{
-			"uuids": []string{storyPackageUuid},
+			"uuids": []string{uuid},
 		},
 		Result: &result,
 	}

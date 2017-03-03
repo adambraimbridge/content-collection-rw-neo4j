@@ -37,7 +37,8 @@ func (cd service) Initialise() error {
 	}
 
 	return cd.conn.EnsureConstraints(map[string]string{
-		"StoryPackage": "uuid"})
+		"StoryPackage": "uuid",
+		"ContentPackage": "uuid"})
 }
 
 // Check - Feeds into the Healthcheck and checks whether we can connect to Neo and that the datastore isn't empty
@@ -120,14 +121,14 @@ func (pcd service) Write(thing interface{}, collectionType string, relationType 
 	queries := []*neoism.CypherQuery{deleteRelationshipsQuery, writeContentCollectionQuery}
 
 	for i, item := range newContentCollection.Items {
-		addItemQuery := addStoryPackageItemQuery(collectionType, relationType, newContentCollection.UUID, item.UUID, i + 1)
+		addItemQuery := addCollectionItemQuery(collectionType, relationType, newContentCollection.UUID, item.UUID, i + 1)
 		queries = append(queries, addItemQuery)
 	}
 
 	return pcd.conn.CypherBatch(queries)
 }
 
-func addStoryPackageItemQuery(contentCollectionType string, relationType string, contentCollectionUuid string, itemUuid string, order int) *neoism.CypherQuery {
+func addCollectionItemQuery(contentCollectionType string, relationType string, contentCollectionUuid string, itemUuid string, order int) *neoism.CypherQuery {
 	query := &neoism.CypherQuery{
 		Statement: fmt.Sprintf(`MATCH (n:%s {uuid:{contentCollectionUuid}})
 			MERGE (content:Thing {uuid: {contentUuid}})
@@ -176,7 +177,7 @@ func (pcd service) Delete(uuid string, relationType string) (bool, error) {
 	return deleted, err
 }
 
-// DecodeJSON - Decodes JSON into story package
+// DecodeJSON - Decodes JSON into a content collection
 func (pcd service) DecodeJSON(dec *json.Decoder) (interface{}, string, error) {
 	c := contentCollection{}
 	err := dec.Decode(&c)
