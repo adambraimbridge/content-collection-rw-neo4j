@@ -21,9 +21,9 @@ type NeoHttpHandler interface {
 }
 
 type handler struct {
-	s              	Service
-	collectionType 	string
-	relationType 	string
+	collectionService       Service
+	collectionType 		string
+	relationType 		string
 }
 
 func NewNeoHttpHandler(cypherRunner neoutils.NeoConnection, collectionType string, relationType string) NeoHttpHandler {
@@ -51,7 +51,7 @@ func (hh *handler) PutHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	dec := json.NewDecoder(body)
-	inst, docUUID, err := hh.s.DecodeJSON(dec)
+	inst, docUUID, err := hh.collectionService.DecodeJSON(dec)
 
 	if err != nil {
 		writeJSONError(w, err.Error(), http.StatusBadRequest, req, uuid)
@@ -63,18 +63,12 @@ func (hh *handler) PutHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = hh.s.Write(inst, hh.collectionType, hh.relationType)
+	err = hh.collectionService.Write(inst, hh.collectionType, hh.relationType)
 
 	if err != nil {
 		switch e := err.(type) {
 		case noContentReturnedError:
 			writeJSONError(w, e.NoContentReturnedDetails(), http.StatusNoContent, req, uuid)
-			return
-		case *neoutils.ConstraintViolationError:
-			// TODO: remove neo specific error check once all apps are
-			// updated to use neoutils.Connect() because that maps errors
-			// to rwapi.ConstraintOrTransactionError
-			writeJSONError(w, e.Error(), http.StatusConflict, req, uuid)
 			return
 		case rwapi.ConstraintOrTransactionError:
 			writeJSONError(w, e.Error(), http.StatusConflict, req, uuid)
@@ -95,7 +89,7 @@ func (hh *handler) DeleteHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	uuid := vars["uuid"]
 
-	deleted, err := hh.s.Delete(uuid, hh.relationType)
+	deleted, err := hh.collectionService.Delete(uuid, hh.relationType)
 
 	if err != nil {
 		writeJSONError(w, err.Error(), http.StatusServiceUnavailable, req, uuid)
@@ -113,7 +107,7 @@ func (hh *handler) GetHandler(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	uuid := vars["uuid"]
 
-	obj, found, err := hh.s.Read(uuid, hh.collectionType, hh.relationType)
+	obj, found, err := hh.collectionService.Read(uuid, hh.collectionType, hh.relationType)
 
 	w.Header().Add("Content-Type", "application/json")
 
@@ -136,7 +130,7 @@ func (hh *handler) GetHandler(w http.ResponseWriter, req *http.Request) {
 
 func (hh *handler) CountHandler(w http.ResponseWriter, r *http.Request) {
 
-	count, err := hh.s.Count(hh.collectionType)
+	count, err := hh.collectionService.Count(hh.collectionType)
 
 	w.Header().Add("Content-Type", "application/json")
 

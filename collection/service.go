@@ -8,10 +8,10 @@ import (
 )
 
 type Service interface {
-	Write(thing interface{}, collectionType string, relationType string) error
-	Read(uuid string, collectionType string, relationType string) (thing interface{}, found bool, err error)
+	Write(newContentCollection contentCollection, collectionType string, relationType string) error
+	Read(uuid string, collectionType string, relationType string) (thing contentCollection, found bool, err error)
 	Delete(uuid string, relationType string) (found bool, err error)
-	DecodeJSON(*json.Decoder) (thing interface{}, identity string, err error)
+	DecodeJSON(*json.Decoder) (thing contentCollection, identity string, err error)
 	Count(collectionType string) (int, error)
 	Check() error
 	Initialise() error
@@ -28,14 +28,6 @@ func NewContentCollectionService(cypherRunner neoutils.NeoConnection) service {
 
 //Initialise initialisation of the indexes
 func (cd service) Initialise() error {
-	err := cd.conn.EnsureIndexes(map[string]string{
-		"Identifier": "value",
-	})
-
-	if err != nil {
-		return err
-	}
-
 	return cd.conn.EnsureConstraints(map[string]string{
 		"StoryPackage": "uuid",
 		"ContentPackage": "uuid"})
@@ -47,7 +39,7 @@ func (pcd service) Check() error {
 }
 
 // Read - reads a content collection given a UUID
-func (pcd service) Read(uuid string, collectionType string, relationType string) (interface{}, bool, error) {
+func (pcd service) Read(uuid string, collectionType string, relationType string) (contentCollection, bool, error) {
 	results := []struct {
 		contentCollection
 	}{}
@@ -90,12 +82,10 @@ func (pcd service) Read(uuid string, collectionType string, relationType string)
 }
 
 //Write - Writes a content collection node
-func (pcd service) Write(thing interface{}, collectionType string, relationType string) error {
-	newContentCollection := thing.(contentCollection)
-
+func (pcd service) Write(newContentCollection contentCollection, collectionType string, relationType string) error {
 	deleteRelationshipsQuery := &neoism.CypherQuery{
-		Statement: fmt.Sprintf(`MATCH (n:Thing {uuid: {uuid}})
-			MATCH (item:Thing)<-[rel:%s]-(n)
+		Statement: fmt.Sprintf(`MATCH (n:Curation {uuid: {uuid}})
+			OPTIONAL MATCH (item:Thing)<-[rel:%s]-(n)
 			DELETE rel`, relationType),
 		Parameters: map[string]interface{}{
 			"uuid": newContentCollection.UUID,
@@ -178,7 +168,7 @@ func (pcd service) Delete(uuid string, relationType string) (bool, error) {
 }
 
 // DecodeJSON - Decodes JSON into a content collection
-func (pcd service) DecodeJSON(dec *json.Decoder) (interface{}, string, error) {
+func (pcd service) DecodeJSON(dec *json.Decoder) (contentCollection, string, error) {
 	c := contentCollection{}
 	err := dec.Decode(&c)
 

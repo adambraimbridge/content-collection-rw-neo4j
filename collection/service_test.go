@@ -129,11 +129,11 @@ func checkDbClean(db neoutils.CypherRunner, t *testing.T) {
 	assert := assert.New(t)
 
 	result := []struct {
-		Uuid string `json:"org.uuid"`
+		Uuid string `json:"uuid"`
 	}{}
 
 	checkGraph := neoism.CypherQuery{
-		Statement: `MATCH (org:Thing) WHERE org.uuid in {uuids} RETURN org.uuid`,
+		Statement: `MATCH (n:Thing) WHERE n.uuid in {uuids} RETURN n.uuid`,
 		Parameters: neoism.Props{
 			"uuids": []string{uuid},
 		},
