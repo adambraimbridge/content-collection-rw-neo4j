@@ -23,8 +23,7 @@ func TestRead404NotFound(t *testing.T) {
 	testService := getContentCollectionService(db)
 	defer cleanDB(db, assert)
 
-	result, found, err := testService.Read(storyPackageUuid, storyPackageCollectionType)
-	foundContentCollection := result.(contentCollection)
+	foundContentCollection, found, err := testService.Read(storyPackageUuid, storyPackageCollectionType)
 
 	assert.NoError(err)
 	assert.Equal("", foundContentCollection.UUID, "Result shouldn't exist in DB")
@@ -168,11 +167,11 @@ func checkDbClean(db neoutils.CypherRunner, t *testing.T) {
 	assert := assert.New(t)
 
 	result := []struct {
-		Uuid string `json:"org.uuid"`
+		Uuid string `json:"uuid"`
 	}{}
 
 	checkGraph := neoism.CypherQuery{
-		Statement: `MATCH (org:Thing) WHERE org.uuid in {uuids} RETURN org.uuid`,
+		Statement: `MATCH (n:Thing) WHERE n.uuid in {uuids} RETURN n.uuid`,
 		Parameters: neoism.Props{
 			"uuids": []string{storyPackageUuid},
 		},
