@@ -66,7 +66,7 @@ func TestDelete(t *testing.T) {
 	result, found, err = testService.Read(uuid, collectionType, relationType);
 	assert.NoError(err)
 	assert.False(found)
-	assert.Equal(contentCollection{}, result.(contentCollection))
+	assert.Equal(contentCollection{}, result)
 }
 
 func createContentCollection(itemCount int) contentCollection {
