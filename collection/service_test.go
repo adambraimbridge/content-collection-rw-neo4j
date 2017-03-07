@@ -18,52 +18,52 @@ const (
 func TestWrite(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db)
+	testService := getContentCollectionService(db, collectionType, relationType)
 	defer cleanDB(db, assert)
 
-	err := testService.Write(createContentCollection(2), collectionType, relationType)
+	err := testService.Write(createContentCollection(2))
 	assert.NoError(err)
 
-	result, found, err := testService.Read(uuid, collectionType, relationType);
+	result, found, err := testService.Read(uuid, );
 	validateResult(assert, result, found, err, 2)
 }
 
 func TestUpdate(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db)
+	testService := getContentCollectionService(db, collectionType, relationType)
 	defer cleanDB(db, assert)
 
-	err := testService.Write(createContentCollection(2), collectionType, relationType)
+	err := testService.Write(createContentCollection(2))
 	assert.NoError(err)
 
-	result, found, err := testService.Read(uuid, collectionType, relationType);
+	result, found, err := testService.Read(uuid)
 	validateResult(assert, result, found, err, 2)
 
-	err = testService.Write(createContentCollection(3), collectionType, relationType)
+	err = testService.Write(createContentCollection(3))
 	assert.NoError(err)
 
-	result, found, err = testService.Read(uuid, collectionType, relationType);
+	result, found, err = testService.Read(uuid)
 	validateResult(assert, result, found, err, 3)
 }
 
 func TestDelete(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db)
+	testService := getContentCollectionService(db, collectionType, relationType)
 	defer cleanDB(db, assert)
 
-	err := testService.Write(createContentCollection(2), collectionType, relationType)
+	err := testService.Write(createContentCollection(2))
 	assert.NoError(err)
 
-	result, found, err := testService.Read(uuid, collectionType, relationType);
+	result, found, err := testService.Read(uuid);
 	validateResult(assert, result, found, err, 2)
 
-	deleted, err := testService.Delete(uuid, relationType)
+	deleted, err := testService.Delete(uuid)
 	assert.NoError(err)
 	assert.Equal(true, deleted)
 
-	result, found, err = testService.Read(uuid, collectionType, relationType);
+	result, found, err = testService.Read(uuid)
 	assert.NoError(err)
 	assert.False(found)
 	assert.Equal(contentCollection{}, result)
@@ -144,8 +144,8 @@ func checkDbClean(db neoutils.CypherRunner, t *testing.T) {
 	assert.Empty(result)
 }
 
-func getContentCollectionService(db neoutils.NeoConnection) service {
-	s := NewContentCollectionService(db)
+func getContentCollectionService(db neoutils.NeoConnection, collectionType string, relationType string) service {
+	s := NewContentCollectionService(db, collectionType, relationType)
 	s.Initialise()
 	return s
 }

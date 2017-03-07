@@ -7,30 +7,22 @@ import (
 	"github.com/jmcvetta/neoism"
 )
 
-type Service interface {
-	Write(newContentCollection contentCollection, collectionType string, relationType string) error
-	Read(uuid string, collectionType string, relationType string) (thing contentCollection, found bool, err error)
-	Delete(uuid string, relationType string) (found bool, err error)
-	DecodeJSON(*json.Decoder) (thing contentCollection, identity string, err error)
-	Count(collectionType string) (int, error)
-	Check() error
-	Initialise() error
-}
-
 type service struct {
-	conn neoutils.NeoConnection
+	conn 		neoutils.NeoConnection
+	collectionType 	string
+	relationType 	string
 }
 
 //instantiate service
-func NewContentCollectionService(cypherRunner neoutils.NeoConnection) service {
-	return service{cypherRunner}
+func NewContentCollectionService(cypherRunner neoutils.NeoConnection, collectionType string, relationType string) service {
+	return service{cypherRunner, collectionType, relationType}
 }
 
 //Initialise initialisation of the indexes
 func (cd service) Initialise() error {
 	return cd.conn.EnsureConstraints(map[string]string{
-		"StoryPackage": "uuid",
-		"ContentPackage": "uuid"})
+		cd.collectionType: "uuid",
+	})
 }
 
 // Check - Feeds into the Healthcheck and checks whether we can connect to Neo and that the datastore isn't empty
@@ -39,7 +31,7 @@ func (pcd service) Check() error {
 }
 
 // Read - reads a content collection given a UUID
-func (pcd service) Read(uuid string, collectionType string, relationType string) (contentCollection, bool, error) {
+func (pcd service) Read(uuid string) (interface{}, bool, error) {
 	results := []struct {
 		contentCollection
 	}{}
@@ -49,7 +41,7 @@ func (pcd service) Read(uuid string, collectionType string, relationType string)
 				OPTIONAL MATCH (n)-[rel:%s]->(t:Thing)
 				WITH n, rel, t
 				ORDER BY rel.order
-				RETURN n.uuid as uuid, n.publishReference as publishReference, n.lastModified as lastModified, collect({uuid:t.uuid}) as items`, collectionType, relationType),
+				RETURN n.uuid as uuid, n.publishReference as publishReference, n.lastModified as lastModified, collect({uuid:t.uuid}) as items`, pcd.collectionType, pcd.relationType),
 		Parameters: map[string]interface{}{
 			"uuid": uuid,
 		},
@@ -82,11 +74,13 @@ func (pcd service) Read(uuid string, collectionType string, relationType string)
 }
 
 //Write - Writes a content collection node
-func (pcd service) Write(newContentCollection contentCollection, collectionType string, relationType string) error {
+func (pcd service) Write(newThing interface{}) error {
+	newContentCollection := newThing.(contentCollection);
+
 	deleteRelationshipsQuery := &neoism.CypherQuery{
 		Statement: fmt.Sprintf(`MATCH (n:Curation {uuid: {uuid}})
 			OPTIONAL MATCH (item:Thing)<-[rel:%s]-(n)
-			DELETE rel`, relationType),
+			DELETE rel`, pcd.relationType),
 		Parameters: map[string]interface{}{
 			"uuid": newContentCollection.UUID,
 		},
@@ -101,7 +95,7 @@ func (pcd service) Write(newContentCollection contentCollection, collectionType 
 	writeContentCollectionQuery := &neoism.CypherQuery{
 		Statement: `MERGE (n:Thing {uuid: {uuid}})
 		    set n={allprops}
-		    set n :Curation:` + collectionType,
+		    set n :Curation:` + pcd.collectionType,
 		Parameters: map[string]interface{}{
 			"uuid":     newContentCollection.UUID,
 			"allprops": params,
@@ -111,7 +105,7 @@ func (pcd service) Write(newContentCollection contentCollection, collectionType 
 	queries := []*neoism.CypherQuery{deleteRelationshipsQuery, writeContentCollectionQuery}
 
 	for i, item := range newContentCollection.Items {
-		addItemQuery := addCollectionItemQuery(collectionType, relationType, newContentCollection.UUID, item.UUID, i + 1)
+		addItemQuery := addCollectionItemQuery(pcd.collectionType, pcd.relationType, newContentCollection.UUID, item.UUID, i + 1)
 		queries = append(queries, addItemQuery)
 	}
 
@@ -134,11 +128,11 @@ func addCollectionItemQuery(contentCollectionType string, relationType string, c
 }
 
 //Delete - Deletes a content collection
-func (pcd service) Delete(uuid string, relationType string) (bool, error) {
+func (pcd service) Delete(uuid string) (bool, error) {
 	removeRelationships := &neoism.CypherQuery{
 		Statement: fmt.Sprintf(`MATCH (n:Thing {uuid: {uuid}})
 			OPTIONAL MATCH (item:Thing)<-[rel:%s]-(n)
-			DELETE rel`, relationType),
+			DELETE rel`, pcd.relationType),
 		Parameters: map[string]interface{}{
 			"uuid":         uuid,
 		},
@@ -168,7 +162,7 @@ func (pcd service) Delete(uuid string, relationType string) (bool, error) {
 }
 
 // DecodeJSON - Decodes JSON into a content collection
-func (pcd service) DecodeJSON(dec *json.Decoder) (contentCollection, string, error) {
+func (pcd service) DecodeJSON(dec *json.Decoder) (interface{}, string, error) {
 	c := contentCollection{}
 	err := dec.Decode(&c)
 
@@ -176,13 +170,13 @@ func (pcd service) DecodeJSON(dec *json.Decoder) (contentCollection, string, err
 }
 
 // Count - Returns a count of the number of content in this Neo instance
-func (pcd service) Count(collectionType string) (int, error) {
+func (pcd service) Count() (int, error) {
 	results := []struct {
 		Count int `json:"c"`
 	}{}
 
 	query := &neoism.CypherQuery{
-		Statement: fmt.Sprintf(`MATCH (n:%s) RETURN count(n) as c`, collectionType),
+		Statement: fmt.Sprintf(`MATCH (n:%s) RETURN count(n) as c`, pcd.collectionType),
 		Result:    &results,
 	}
 
