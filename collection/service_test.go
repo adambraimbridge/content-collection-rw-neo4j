@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	uuid = "sp-12345"
+	uuid           = "sp-12345"
 	collectionType = "StoryPackage"
-	relationType = "SELECTS"
+	relationType   = "SELECTS"
 )
 
 func TestWrite(t *testing.T) {
@@ -24,7 +24,7 @@ func TestWrite(t *testing.T) {
 	err := testService.Write(createContentCollection(2))
 	assert.NoError(err)
 
-	result, found, err := testService.Read(uuid, );
+	result, found, err := testService.Read(uuid)
 	validateResult(assert, result, found, err, 2)
 }
 
@@ -56,7 +56,7 @@ func TestDelete(t *testing.T) {
 	err := testService.Write(createContentCollection(2))
 	assert.NoError(err)
 
-	result, found, err := testService.Read(uuid);
+	result, found, err := testService.Read(uuid)
 	validateResult(assert, result, found, err, 2)
 
 	deleted, err := testService.Delete(uuid)
@@ -70,9 +70,9 @@ func TestDelete(t *testing.T) {
 }
 
 func createContentCollection(itemCount int) contentCollection {
-	items := []item {}
-	for count := 0; count < itemCount; count ++ {
-		items = append(items, item { fmt.Sprint("Item", count) } );
+	items := []item{}
+	for count := 0; count < itemCount; count++ {
+		items = append(items, item{fmt.Sprint("Item", count)})
 	}
 
 	c := contentCollection{
@@ -86,8 +86,8 @@ func createContentCollection(itemCount int) contentCollection {
 }
 
 func validateResult(assert *assert.Assertions, result interface{}, found bool, err error, itemCount int) {
-	assert.NoError(err);
-	assert.True(found);
+	assert.NoError(err)
+	assert.True(found)
 
 	collection := result.(contentCollection)
 	assert.Equal(uuid, collection.UUID)

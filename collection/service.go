@@ -8,9 +8,9 @@ import (
 )
 
 type service struct {
-	conn 		neoutils.NeoConnection
-	collectionType 	string
-	relationType 	string
+	conn           neoutils.NeoConnection
+	collectionType string
+	relationType   string
 }
 
 //instantiate service
@@ -75,7 +75,7 @@ func (pcd service) Read(uuid string) (interface{}, bool, error) {
 
 //Write - Writes a content collection node
 func (pcd service) Write(newThing interface{}) error {
-	newContentCollection := newThing.(contentCollection);
+	newContentCollection := newThing.(contentCollection)
 
 	deleteRelationshipsQuery := &neoism.CypherQuery{
 		Statement: fmt.Sprintf(`MATCH (n:Curation {uuid: {uuid}})
@@ -105,7 +105,7 @@ func (pcd service) Write(newThing interface{}) error {
 	queries := []*neoism.CypherQuery{deleteRelationshipsQuery, writeContentCollectionQuery}
 
 	for i, item := range newContentCollection.Items {
-		addItemQuery := addCollectionItemQuery(pcd.collectionType, pcd.relationType, newContentCollection.UUID, item.UUID, i + 1)
+		addItemQuery := addCollectionItemQuery(pcd.collectionType, pcd.relationType, newContentCollection.UUID, item.UUID, i+1)
 		queries = append(queries, addItemQuery)
 	}
 
@@ -134,7 +134,7 @@ func (pcd service) Delete(uuid string) (bool, error) {
 			OPTIONAL MATCH (item:Thing)<-[rel:%s]-(n)
 			DELETE rel`, pcd.relationType),
 		Parameters: map[string]interface{}{
-			"uuid":         uuid,
+			"uuid": uuid,
 		},
 	}
 
