@@ -81,7 +81,7 @@ func main() {
 
 		baseftrwapp.RunServerWithConf(baseftrwapp.RWConf{
 			Services:      services,
-			HealthHandler: v1a.Handler("ft-content-collection_rw_neo4j ServiceModule", "Writes 'content' to Neo4j, usually as part of a bulk upload done on a schedule", checks...),
+			HealthHandler: v1a.Handler("ft-content-collection_rw_neo4j ServiceModule", "Writes content collections to Neo4j, usually as part of a bulk upload done on a schedule", checks...),
 			Port:          *port,
 			ServiceName:   "content-collection-rw-neo4j",
 			Env:           "local",
