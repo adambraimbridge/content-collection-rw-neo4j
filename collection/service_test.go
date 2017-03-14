@@ -11,7 +11,7 @@ import (
 
 const (
 	uuid           = "sp-12345"
-	collectionType = "StoryPackage"
+	collectionType = "Curation:StoryPackage"
 	relationType   = "SELECTS"
 )
 

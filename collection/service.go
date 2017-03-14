@@ -78,9 +78,9 @@ func (pcd service) Write(newThing interface{}) error {
 	newContentCollection := newThing.(contentCollection)
 
 	deleteRelationshipsQuery := &neoism.CypherQuery{
-		Statement: fmt.Sprintf(`MATCH (n:Curation {uuid: {uuid}})
+		Statement: fmt.Sprintf(`MATCH (n:%s {uuid: {uuid}})
 			OPTIONAL MATCH (item:Thing)<-[rel:%s]-(n)
-			DELETE rel`, pcd.relationType),
+			DELETE rel`, pcd.collectionType, pcd.relationType),
 		Parameters: map[string]interface{}{
 			"uuid": newContentCollection.UUID,
 		},
@@ -95,7 +95,7 @@ func (pcd service) Write(newThing interface{}) error {
 	writeContentCollectionQuery := &neoism.CypherQuery{
 		Statement: `MERGE (n:Thing {uuid: {uuid}})
 		    set n={allprops}
-		    set n :Curation:` + pcd.collectionType,
+		    set n :ContentCollection:` + pcd.collectionType,
 		Parameters: map[string]interface{}{
 			"uuid":     newContentCollection.UUID,
 			"allprops": params,
