@@ -9,16 +9,16 @@ import (
 	"testing"
 )
 
-const (
-	uuid           = "sp-12345"
-	collectionType = "Curation:StoryPackage"
-	relationType   = "SELECTS"
+var (
+	uuid     = "sp-12345"
+	labels   = []string{"Curation", "StoryPackage"}
+	relation = "SELECTS"
 )
 
 func TestWrite(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db, collectionType, relationType)
+	testService := getContentCollectionService(db, labels, relation)
 	defer cleanDB(db, assert)
 
 	err := testService.Write(createContentCollection(2))
@@ -31,7 +31,7 @@ func TestWrite(t *testing.T) {
 func TestUpdate(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db, collectionType, relationType)
+	testService := getContentCollectionService(db, labels, relation)
 	defer cleanDB(db, assert)
 
 	err := testService.Write(createContentCollection(2))
@@ -50,7 +50,7 @@ func TestUpdate(t *testing.T) {
 func TestDelete(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db, collectionType, relationType)
+	testService := getContentCollectionService(db, labels, relation)
 	defer cleanDB(db, assert)
 
 	err := testService.Write(createContentCollection(2))
@@ -144,8 +144,8 @@ func checkDbClean(db neoutils.CypherRunner, t *testing.T) {
 	assert.Empty(result)
 }
 
-func getContentCollectionService(db neoutils.NeoConnection, collectionType string, relationType string) service {
-	s := NewContentCollectionService(db, collectionType, relationType)
+func getContentCollectionService(db neoutils.NeoConnection, labels []string, relation string) service {
+	s := NewContentCollectionService(db, labels, relation)
 	s.Initialise()
 	return s
 }

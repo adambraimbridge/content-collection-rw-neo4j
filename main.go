@@ -67,8 +67,8 @@ func main() {
 		}
 
 		services := map[string]baseftrwapp.Service{
-			"content-collection/story-package":   collection.NewContentCollectionService(db, "Curation:StoryPackage", "SELECTS"),
-			"content-collection/content-package": collection.NewContentCollectionService(db, "ContentPackageLink", "CONTAINS"),
+			"content-collection/story-package":   collection.NewContentCollectionService(db, []string{"Curation", "StoryPackage"}, "SELECTS"),
+			"content-collection/content-package": collection.NewContentCollectionService(db, []string{}, "CONTAINS"),
 		}
 
 		var checks []v1a.Check

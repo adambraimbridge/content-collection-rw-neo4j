@@ -5,24 +5,39 @@ import (
 	"fmt"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	"github.com/jmcvetta/neoism"
+	"strings"
 )
 
+var defaultLabels = []string{"ContentCollection"}
+
 type service struct {
-	conn           neoutils.NeoConnection
-	collectionType string
-	relationType   string
+	conn         neoutils.NeoConnection
+	joinedLabels string
+	relation     string
 }
 
 //instantiate service
-func NewContentCollectionService(cypherRunner neoutils.NeoConnection, collectionType string, relationType string) service {
-	return service{cypherRunner, collectionType, relationType}
+func NewContentCollectionService(cypherRunner neoutils.NeoConnection, labels []string, relation string) service {
+	labels = append(defaultLabels, labels...)
+	joinedLabels := strings.Join(labels, ":")
+
+	return service{
+		cypherRunner,
+		joinedLabels,
+		relation,
+	}
 }
 
 //Initialise initialisation of the indexes
-func (cd service) Initialise() error {
-	return cd.conn.EnsureConstraints(map[string]string{
-		cd.collectionType: "uuid",
-	})
+func (pcd service) Initialise() error {
+	labels := strings.Split(pcd.joinedLabels, ":")
+
+	constraintMap := map[string]string{}
+	for _, label := range labels {
+		constraintMap[label] = "uuid"
+	}
+
+	return pcd.conn.EnsureConstraints(constraintMap)
 }
 
 // Check - Feeds into the Healthcheck and checks whether we can connect to Neo and that the datastore isn't empty
@@ -41,7 +56,10 @@ func (pcd service) Read(uuid string) (interface{}, bool, error) {
 				OPTIONAL MATCH (n)-[rel:%s]->(t:Thing)
 				WITH n, rel, t
 				ORDER BY rel.order
-				RETURN n.uuid as uuid, n.publishReference as publishReference, n.lastModified as lastModified, collect({uuid:t.uuid}) as items`, pcd.collectionType, pcd.relationType),
+				RETURN  n.uuid as uuid,
+					n.publishReference as publishReference,
+					n.lastModified as lastModified,
+					collect({uuid:t.uuid}) as items`, pcd.joinedLabels, pcd.relation),
 		Parameters: map[string]interface{}{
 			"uuid": uuid,
 		},
@@ -80,7 +98,7 @@ func (pcd service) Write(newThing interface{}) error {
 	deleteRelationshipsQuery := &neoism.CypherQuery{
 		Statement: fmt.Sprintf(`MATCH (n:%s {uuid: {uuid}})
 			OPTIONAL MATCH (item:Thing)<-[rel:%s]-(n)
-			DELETE rel`, pcd.collectionType, pcd.relationType),
+			DELETE rel`, pcd.joinedLabels, pcd.relation),
 		Parameters: map[string]interface{}{
 			"uuid": newContentCollection.UUID,
 		},
@@ -93,9 +111,9 @@ func (pcd service) Write(newThing interface{}) error {
 	}
 
 	writeContentCollectionQuery := &neoism.CypherQuery{
-		Statement: `MERGE (n:Thing {uuid: {uuid}})
+		Statement: fmt.Sprintf(`MERGE (n:Thing {uuid: {uuid}})
 		    set n={allprops}
-		    set n :ContentCollection:` + pcd.collectionType,
+		    set n:%s`, pcd.joinedLabels),
 		Parameters: map[string]interface{}{
 			"uuid":     newContentCollection.UUID,
 			"allprops": params,
@@ -105,18 +123,18 @@ func (pcd service) Write(newThing interface{}) error {
 	queries := []*neoism.CypherQuery{deleteRelationshipsQuery, writeContentCollectionQuery}
 
 	for i, item := range newContentCollection.Items {
-		addItemQuery := addCollectionItemQuery(pcd.collectionType, pcd.relationType, newContentCollection.UUID, item.UUID, i+1)
+		addItemQuery := addCollectionItemQuery(pcd.joinedLabels, pcd.relation, newContentCollection.UUID, item.UUID, i+1)
 		queries = append(queries, addItemQuery)
 	}
 
 	return pcd.conn.CypherBatch(queries)
 }
 
-func addCollectionItemQuery(contentCollectionType string, relationType string, contentCollectionUuid string, itemUuid string, order int) *neoism.CypherQuery {
+func addCollectionItemQuery(joinedLabels string, relation string, contentCollectionUuid string, itemUuid string, order int) *neoism.CypherQuery {
 	query := &neoism.CypherQuery{
 		Statement: fmt.Sprintf(`MATCH (n:%s {uuid:{contentCollectionUuid}})
 			MERGE (content:Thing {uuid: {contentUuid}})
-			MERGE (n)-[rel:%s {order: {itemOrder}}]->(content)`, contentCollectionType, relationType),
+			MERGE (n)-[rel:%s {order: {itemOrder}}]->(content)`, joinedLabels, relation),
 		Parameters: map[string]interface{}{
 			"contentCollectionUuid": contentCollectionUuid,
 			"contentUuid":           itemUuid,
@@ -132,7 +150,7 @@ func (pcd service) Delete(uuid string) (bool, error) {
 	removeRelationships := &neoism.CypherQuery{
 		Statement: fmt.Sprintf(`MATCH (n:Thing {uuid: {uuid}})
 			OPTIONAL MATCH (item:Thing)<-[rel:%s]-(n)
-			DELETE rel`, pcd.relationType),
+			DELETE rel`, pcd.relation),
 		Parameters: map[string]interface{}{
 			"uuid": uuid,
 		},
@@ -176,7 +194,7 @@ func (pcd service) Count() (int, error) {
 	}{}
 
 	query := &neoism.CypherQuery{
-		Statement: fmt.Sprintf(`MATCH (n:%s) RETURN count(n) as c`, pcd.collectionType),
+		Statement: fmt.Sprintf(`MATCH (n:%s) RETURN count(n) as c`, pcd.joinedLabels),
 		Result:    &results,
 	}
 
