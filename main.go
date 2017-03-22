@@ -2,24 +2,19 @@ package main
 
 import (
 	"fmt"
+	_ "net/http/pprof"
+	"os"
+
 	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
 	"github.com/Financial-Times/content-collection-rw-neo4j/collection"
 	"github.com/Financial-Times/go-fthealth/v1a"
-	"github.com/Financial-Times/http-handlers-go/httphandlers"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
-	"github.com/Financial-Times/service-status-go/gtg"
-	status "github.com/Financial-Times/service-status-go/httphandlers"
 	log "github.com/Sirupsen/logrus"
-	"github.com/gorilla/mux"
 	"github.com/jawher/mow.cli"
-	"github.com/rcrowley/go-metrics"
-	"net/http"
-	_ "net/http/pprof"
-	"os"
 )
 
 func main() {
-	app := cli.App("content-collection-rw-neo4j", "A RESTful API for managing Story Packages in neo4j")
+	app := cli.App("content-collection-rw-neo4j", "A RESTful API for managing Content Collections in neo4j")
 
 	neoURL := app.String(cli.StringOpt{
 		Name:   "neo-url",
@@ -67,24 +62,31 @@ func main() {
 		conf := neoutils.DefaultConnectionConfig()
 		conf.BatchSize = *batchSize
 		db, err := neoutils.Connect(*neoURL, conf)
-
 		if err != nil {
 			log.Errorf("Could not connect to neo4j, error=[%s]\n", err)
 		}
 
+		services := map[string]baseftrwapp.Service{
+			"content-collection/story-package":   collection.NewContentCollectionService(db, []string{"Curation", "StoryPackage"}, "SELECTS"),
+			"content-collection/content-package": collection.NewContentCollectionService(db, []string{}, "CONTAINS"),
+		}
+
+		var checks []v1a.Check
+		for _, service := range services {
+			service.Initialise()
+			checks = append(checks, makeCheck(service))
+		}
+
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
 
-		var m http.Handler
-		m = router(db)
-
-		m = httphandlers.HTTPMetricsHandler(metrics.DefaultRegistry, m)
-
-		http.Handle("/", m)
-
-		log.Printf("listening on %d", *port)
-		log.Println(http.ListenAndServe(fmt.Sprintf(":%d", *port), nil).Error())
-		log.Println("exiting on content-collection-rw-neo4j")
-
+		baseftrwapp.RunServerWithConf(baseftrwapp.RWConf{
+			Services:      services,
+			HealthHandler: v1a.Handler("ft-content-collection_rw_neo4j ServiceModule", "Writes content collections to Neo4j, usually as part of a bulk upload done on a schedule", checks...),
+			Port:          *port,
+			ServiceName:   "content-collection-rw-neo4j",
+			Env:           "local",
+			EnableReqLog:  true,
+		})
 	}
 
 	log.SetLevel(log.InfoLevel)
@@ -92,48 +94,13 @@ func main() {
 	app.Run(os.Args)
 }
 
-//Router sets up the Router - extracted for testability
-func router(neoConnection neoutils.NeoConnection) *mux.Router {
-	healthHandler := v1a.Handler("ft-content-collection_rw_neo4j ServiceModule", "Writes 'content' to Neo4j, usually as part of a bulk upload done on a schedule", makeCheck(neoConnection))
-
-	m := mux.NewRouter()
-
-	gtgChecker := make([]gtg.StatusChecker, 0)
-
-	storyHandler := collection.NewNeoHttpHandler(neoConnection, "StoryPackage")
-	m.HandleFunc("/content-collection/story-package/__count", storyHandler.CountHandler).Methods("GET")
-	m.HandleFunc("/content-collection/story-package/{uuid}", storyHandler.GetHandler).Methods("GET")
-	m.HandleFunc("/content-collection/story-package/{uuid}", storyHandler.PutHandler).Methods("PUT")
-	m.HandleFunc("/content-collection/story-package/{uuid}", storyHandler.DeleteHandler).Methods("DELETE")
-
-	contentHandler := collection.NewNeoHttpHandler(neoConnection, "ContentPackage")
-	m.HandleFunc("/content-collection/content-package/__count", contentHandler.CountHandler).Methods("GET")
-	m.HandleFunc("/content-collection/content-package/{uuid}", contentHandler.GetHandler).Methods("GET")
-	m.HandleFunc("/content-collection/content-package/{uuid}", contentHandler.PutHandler).Methods("PUT")
-	m.HandleFunc("/content-collection/content-package/{uuid}", contentHandler.DeleteHandler).Methods("DELETE")
-
-	m.HandleFunc("/__health", healthHandler)
-	// The top one of these feels more correct, but the lower one matches what we have in Dropwizard,
-	// so it's what apps expect currently
-	m.HandleFunc(status.PingPath, status.PingHandler)
-	m.HandleFunc(status.PingPathDW, status.PingHandler)
-
-	// The top one of these feels more correct, but the lower one matches what we have in Dropwizard,
-	// so it's what apps expect currently same as ping, the content of build-info needs more definition
-	m.HandleFunc(status.BuildInfoPath, status.BuildInfoHandler)
-	m.HandleFunc(status.BuildInfoPathDW, status.BuildInfoHandler)
-
-	m.HandleFunc(status.GTGPath, status.NewGoodToGoHandler(gtg.FailFastParallelCheck(gtgChecker)))
-	return m
-}
-
-func makeCheck(cr neoutils.CypherRunner) v1a.Check {
+func makeCheck(service baseftrwapp.Service) v1a.Check {
 	return v1a.Check{
 		BusinessImpact:   "Cannot read/write content via this writer",
 		Name:             "Check connectivity to Neo4j",
 		PanicGuide:       "https://dewey.ft.com/upp-content-collection-rw-neo4j.html",
 		Severity:         1,
-		TechnicalSummary: fmt.Sprintf("Cannot connect to Neo4j instance %s with something written to it", cr),
-		Checker:          func() (string, error) { return "", neoutils.Check(cr) },
+		TechnicalSummary: fmt.Sprintf("Service %s cannot connect to Neo4j", service),
+		Checker:          func() (string, error) { return "", service.Check() },
 	}
 }

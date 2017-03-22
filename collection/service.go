@@ -5,31 +5,39 @@ import (
 	"fmt"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	"github.com/jmcvetta/neoism"
+	"strings"
 )
 
-type Service interface {
-	Write(newContentCollection contentCollection, collectionType string) error
-	Read(uuid string, collectionType string) (thing contentCollection, found bool, err error)
-	Delete(uuid string) (found bool, err error)
-	DecodeJSON(*json.Decoder) (thing contentCollection, identity string, err error)
-	Count(collectionType string) (int, error)
-	Check() error
-	Initialise() error
-}
+var defaultLabels = []string{"ContentCollection"}
 
 type service struct {
-	conn neoutils.NeoConnection
+	conn         neoutils.NeoConnection
+	joinedLabels string
+	relation     string
 }
 
 //instantiate service
-func NewContentCollectionService(cypherRunner neoutils.NeoConnection) service {
-	return service{cypherRunner}
+func NewContentCollectionService(cypherRunner neoutils.NeoConnection, labels []string, relation string) service {
+	labels = append(defaultLabels, labels...)
+	joinedLabels := strings.Join(labels, ":")
+
+	return service{
+		cypherRunner,
+		joinedLabels,
+		relation,
+	}
 }
 
 //Initialise initialisation of the indexes
-func (cd service) Initialise() error {
-	return cd.conn.EnsureConstraints(map[string]string{
-		"StoryPackage": "uuid"})
+func (pcd service) Initialise() error {
+	labels := strings.Split(pcd.joinedLabels, ":")
+
+	constraintMap := map[string]string{}
+	for _, label := range labels {
+		constraintMap[label] = "uuid"
+	}
+
+	return pcd.conn.EnsureConstraints(constraintMap)
 }
 
 // Check - Feeds into the Healthcheck and checks whether we can connect to Neo and that the datastore isn't empty
@@ -38,17 +46,20 @@ func (pcd service) Check() error {
 }
 
 // Read - reads a content collection given a UUID
-func (pcd service) Read(uuid string, collectionType string) (contentCollection, bool, error) {
+func (pcd service) Read(uuid string) (interface{}, bool, error) {
 	results := []struct {
 		contentCollection
 	}{}
 
 	query := &neoism.CypherQuery{
 		Statement: fmt.Sprintf(`MATCH (n:%s {uuid:{uuid}})
-				OPTIONAL MATCH (n)-[rel:SELECTS]->(t:Thing)
+				OPTIONAL MATCH (n)-[rel:%s]->(t:Thing)
 				WITH n, rel, t
 				ORDER BY rel.order
-				RETURN n.uuid as uuid, n.publishReference as publishReference, n.lastModified as lastModified, collect({uuid:t.uuid}) as items`, collectionType),
+				RETURN  n.uuid as uuid,
+					n.publishReference as publishReference,
+					n.lastModified as lastModified,
+					collect({uuid:t.uuid}) as items`, pcd.joinedLabels, pcd.relation),
 		Parameters: map[string]interface{}{
 			"uuid": uuid,
 		},
@@ -81,11 +92,13 @@ func (pcd service) Read(uuid string, collectionType string) (contentCollection, 
 }
 
 //Write - Writes a content collection node
-func (pcd service) Write(newContentCollection contentCollection, collectionType string) error {
+func (pcd service) Write(newThing interface{}) error {
+	newContentCollection := newThing.(contentCollection)
+
 	deleteRelationshipsQuery := &neoism.CypherQuery{
-		Statement: `MATCH (n:Curation {uuid: {uuid}})
-			OPTIONAL MATCH (item:Thing)<-[rel:SELECTS]-(n) 
-			DELETE rel`,
+		Statement: fmt.Sprintf(`MATCH (n:%s {uuid: {uuid}})
+			OPTIONAL MATCH (item:Thing)<-[rel:%s]-(n)
+			DELETE rel`, pcd.joinedLabels, pcd.relation),
 		Parameters: map[string]interface{}{
 			"uuid": newContentCollection.UUID,
 		},
@@ -98,9 +111,9 @@ func (pcd service) Write(newContentCollection contentCollection, collectionType 
 	}
 
 	writeContentCollectionQuery := &neoism.CypherQuery{
-		Statement: `MERGE (n:Thing {uuid: {uuid}})
+		Statement: fmt.Sprintf(`MERGE (n:Thing {uuid: {uuid}})
 		    set n={allprops}
-		    set n :Curation:` + collectionType,
+		    set n:%s`, pcd.joinedLabels),
 		Parameters: map[string]interface{}{
 			"uuid":     newContentCollection.UUID,
 			"allprops": params,
@@ -110,18 +123,18 @@ func (pcd service) Write(newContentCollection contentCollection, collectionType 
 	queries := []*neoism.CypherQuery{deleteRelationshipsQuery, writeContentCollectionQuery}
 
 	for i, item := range newContentCollection.Items {
-		addItemQuery := addStoryPackageItemQuery(collectionType, newContentCollection.UUID, item.UUID, i+1)
+		addItemQuery := addCollectionItemQuery(pcd.joinedLabels, pcd.relation, newContentCollection.UUID, item.UUID, i+1)
 		queries = append(queries, addItemQuery)
 	}
 
 	return pcd.conn.CypherBatch(queries)
 }
 
-func addStoryPackageItemQuery(contentCollectionType string, contentCollectionUuid string, itemUuid string, order int) *neoism.CypherQuery {
+func addCollectionItemQuery(joinedLabels string, relation string, contentCollectionUuid string, itemUuid string, order int) *neoism.CypherQuery {
 	query := &neoism.CypherQuery{
 		Statement: fmt.Sprintf(`MATCH (n:%s {uuid:{contentCollectionUuid}})
 			MERGE (content:Thing {uuid: {contentUuid}})
-			MERGE (n)-[rel:SELECTS {order: {itemOrder}}]->(content)`, contentCollectionType),
+			MERGE (n)-[rel:%s {order: {itemOrder}}]->(content)`, joinedLabels, relation),
 		Parameters: map[string]interface{}{
 			"contentCollectionUuid": contentCollectionUuid,
 			"contentUuid":           itemUuid,
@@ -135,9 +148,9 @@ func addStoryPackageItemQuery(contentCollectionType string, contentCollectionUui
 //Delete - Deletes a content collection
 func (pcd service) Delete(uuid string) (bool, error) {
 	removeRelationships := &neoism.CypherQuery{
-		Statement: `MATCH (n:Thing {uuid: {uuid}})
-			OPTIONAL MATCH (item:Thing)<-[rel:SELECTS]-(n)
-			DELETE rel`,
+		Statement: fmt.Sprintf(`MATCH (n:Thing {uuid: {uuid}})
+			OPTIONAL MATCH (item:Thing)<-[rel:%s]-(n)
+			DELETE rel`, pcd.relation),
 		Parameters: map[string]interface{}{
 			"uuid": uuid,
 		},
@@ -166,8 +179,8 @@ func (pcd service) Delete(uuid string) (bool, error) {
 	return deleted, err
 }
 
-// DecodeJSON - Decodes JSON into story package
-func (pcd service) DecodeJSON(dec *json.Decoder) (contentCollection, string, error) {
+// DecodeJSON - Decodes JSON into a content collection
+func (pcd service) DecodeJSON(dec *json.Decoder) (interface{}, string, error) {
 	c := contentCollection{}
 	err := dec.Decode(&c)
 
@@ -175,13 +188,13 @@ func (pcd service) DecodeJSON(dec *json.Decoder) (contentCollection, string, err
 }
 
 // Count - Returns a count of the number of content in this Neo instance
-func (pcd service) Count(collectionType string) (int, error) {
+func (pcd service) Count() (int, error) {
 	results := []struct {
 		Count int `json:"c"`
 	}{}
 
 	query := &neoism.CypherQuery{
-		Statement: fmt.Sprintf(`MATCH (n:%s) RETURN count(n) as c`, collectionType),
+		Statement: fmt.Sprintf(`MATCH (n:%s) RETURN count(n) as c`, pcd.joinedLabels),
 		Result:    &results,
 	}
 
