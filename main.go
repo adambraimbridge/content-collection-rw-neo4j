@@ -1,20 +1,36 @@
 package main
 
 import (
-	"fmt"
 	_ "net/http/pprof"
 	"os"
 
+	"fmt"
 	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
 	"github.com/Financial-Times/content-collection-rw-neo4j/collection"
-	"github.com/Financial-Times/go-fthealth/v1a"
+	"github.com/Financial-Times/go-fthealth/v1_1"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	log "github.com/Sirupsen/logrus"
 	"github.com/jawher/mow.cli"
 )
 
+var appDescription = "A RESTful API for managing Content Collections in neo4j"
+
 func main() {
 	app := cli.App("content-collection-rw-neo4j", "A RESTful API for managing Content Collections in neo4j")
+
+	appName := app.String(cli.StringOpt{
+		Name:   "app-name",
+		Value:  "content-collection-rw-neo4j",
+		Desc:   "Name of the application",
+		EnvVar: "APP_NAME",
+	})
+
+	appSystemCode := app.String(cli.StringOpt{
+		Name:   "app-system-code",
+		Value:  "upp-content-collection-rw-neo4j",
+		Desc:   "System Code of the application",
+		EnvVar: "APP_SYSTEM_CODE",
+	})
 
 	neoURL := app.String(cli.StringOpt{
 		Name:   "neo-url",
@@ -71,7 +87,7 @@ func main() {
 			"content-collection/content-package": collection.NewContentCollectionService(db, []string{}, "CONTAINS"),
 		}
 
-		var checks []v1a.Check
+		var checks []v1_1.Check
 		for _, service := range services {
 			service.Initialise()
 			checks = append(checks, makeCheck(service))
@@ -79,11 +95,12 @@ func main() {
 
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
 
+		hc := v1_1.HealthCheck{SystemCode: *appSystemCode, Name: *appName, Description: appDescription, Checks: checks}
 		baseftrwapp.RunServerWithConf(baseftrwapp.RWConf{
 			Services:      services,
-			HealthHandler: v1a.Handler("ft-content-collection_rw_neo4j ServiceModule", "Writes content collections to Neo4j, usually as part of a bulk upload done on a schedule", checks...),
+			HealthHandler: v1_1.Handler(&hc),
 			Port:          *port,
-			ServiceName:   "content-collection-rw-neo4j",
+			ServiceName:   *appName,
 			Env:           "local",
 			EnableReqLog:  true,
 		})
@@ -94,8 +111,8 @@ func main() {
 	app.Run(os.Args)
 }
 
-func makeCheck(service baseftrwapp.Service) v1a.Check {
-	return v1a.Check{
+func makeCheck(service baseftrwapp.Service) v1_1.Check {
+	return v1_1.Check{
 		BusinessImpact:   "Cannot read/write content via this writer",
 		Name:             "Check connectivity to Neo4j",
 		PanicGuide:       "https://dewey.ft.com/upp-content-collection-rw-neo4j.html",
