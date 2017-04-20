@@ -4,7 +4,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 
-	"fmt"
 	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
 	"github.com/Financial-Times/content-collection-rw-neo4j/collection"
 	"github.com/Financial-Times/go-fthealth/v1_1"
@@ -82,19 +81,20 @@ func main() {
 			log.Errorf("Could not connect to neo4j, error=[%s]\n", err)
 		}
 
+		spKey := "content-collection/story-package"
+		cpKey := "content-collection/content-package"
 		services := map[string]baseftrwapp.Service{
-			"content-collection/story-package":   collection.NewContentCollectionService(db, []string{"Curation", "StoryPackage"}, "SELECTS"),
-			"content-collection/content-package": collection.NewContentCollectionService(db, []string{}, "CONTAINS"),
+			spKey: collection.NewContentCollectionService(db, []string{"Curation", "StoryPackage"}, "SELECTS"),
+			cpKey: collection.NewContentCollectionService(db, []string{}, "CONTAINS"),
 		}
 
-		var checks []v1_1.Check
 		for _, service := range services {
 			service.Initialise()
-			checks = append(checks, makeCheck(service))
 		}
 
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
 
+		checks := []v1_1.Check{checkNeo4J(services[spKey], *appName, spKey), checkNeo4J(services[cpKey], *appName, cpKey)}
 		hc := v1_1.HealthCheck{SystemCode: *appSystemCode, Name: *appName, Description: appDescription, Checks: checks}
 		baseftrwapp.RunServerWithConf(baseftrwapp.RWConf{
 			Services:      services,
@@ -111,13 +111,13 @@ func main() {
 	app.Run(os.Args)
 }
 
-func makeCheck(service baseftrwapp.Service) v1_1.Check {
+func checkNeo4J(service baseftrwapp.Service, appName string, resource string) v1_1.Check {
 	return v1_1.Check{
 		BusinessImpact:   "Cannot read/write content via this writer",
 		Name:             "Check connectivity to Neo4j",
 		PanicGuide:       "https://dewey.ft.com/upp-content-collection-rw-neo4j.html",
 		Severity:         1,
-		TechnicalSummary: fmt.Sprintf("Service %s cannot connect to Neo4j", service),
+		TechnicalSummary: appName + " cannot connect to Neo4j to retrieve " + resource,
 		Checker:          func() (string, error) { return "", service.Check() },
 	}
 }
