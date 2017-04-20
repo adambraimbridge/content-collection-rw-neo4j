@@ -81,11 +81,11 @@ func main() {
 			log.Errorf("Could not connect to neo4j, error=[%s]\n", err)
 		}
 
-		spKey := "content-collection/story-package"
-		cpKey := "content-collection/content-package"
+		spServiceUrl := "content-collection/story-package"
+		cpServiceUrl := "content-collection/content-package"
 		services := map[string]baseftrwapp.Service{
-			spKey: collection.NewContentCollectionService(db, []string{"Curation", "StoryPackage"}, "SELECTS"),
-			cpKey: collection.NewContentCollectionService(db, []string{}, "CONTAINS"),
+			spServiceUrl: collection.NewContentCollectionService(db, []string{"Curation", "StoryPackage"}, "SELECTS"),
+			cpServiceUrl: collection.NewContentCollectionService(db, []string{}, "CONTAINS"),
 		}
 
 		for _, service := range services {
@@ -94,7 +94,7 @@ func main() {
 
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
 
-		checks := []v1_1.Check{checkNeo4J(services[spKey], *appName, spKey), checkNeo4J(services[cpKey], *appName, cpKey)}
+		checks := []v1_1.Check{checkNeo4J(services[spServiceUrl], spServiceUrl), checkNeo4J(services[cpServiceUrl], cpServiceUrl)}
 		hc := v1_1.HealthCheck{SystemCode: *appSystemCode, Name: *appName, Description: appDescription, Checks: checks}
 		baseftrwapp.RunServerWithConf(baseftrwapp.RWConf{
 			Services:      services,
@@ -111,13 +111,13 @@ func main() {
 	app.Run(os.Args)
 }
 
-func checkNeo4J(service baseftrwapp.Service, appName string, resource string) v1_1.Check {
+func checkNeo4J(service baseftrwapp.Service, serviceUrl string) v1_1.Check {
 	return v1_1.Check{
 		BusinessImpact:   "Cannot read/write content via this writer",
 		Name:             "Check connectivity to Neo4j",
 		PanicGuide:       "https://dewey.ft.com/upp-content-collection-rw-neo4j.html",
 		Severity:         1,
-		TechnicalSummary: appName + " cannot connect to Neo4j to retrieve " + resource,
+		TechnicalSummary: "Service mapped on URL " + serviceUrl + " cannot connect to Neo4j",
 		Checker:          func() (string, error) { return "", service.Check() },
 	}
 }
