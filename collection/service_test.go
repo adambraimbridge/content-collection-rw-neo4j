@@ -10,15 +10,17 @@ import (
 )
 
 var (
-	uuid     = "sp-12345"
-	labels   = []string{"Curation", "StoryPackage"}
-	relation = "SELECTS"
+	uuid              = "sp-12345"
+	labels            = []string{"Curation", "StoryPackage"}
+	relation          = "SELECTS"
+	extraRelForDelete = "IS_CURTATED_FOR"
+	extraRelThingUUID = "t-12345"
 )
 
 func TestWrite(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db, labels, relation)
+	testService := getContentCollectionService(db, labels, relation, "")
 	defer cleanDB(db, assert)
 
 	err := testService.Write(createContentCollection(2))
@@ -31,7 +33,7 @@ func TestWrite(t *testing.T) {
 func TestUpdate(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db, labels, relation)
+	testService := getContentCollectionService(db, labels, relation, "")
 	defer cleanDB(db, assert)
 
 	err := testService.Write(createContentCollection(2))
@@ -50,7 +52,7 @@ func TestUpdate(t *testing.T) {
 func TestDelete(t *testing.T) {
 	assert := assert.New(t)
 	db := getDatabaseConnectionAndCheckClean(t, assert)
-	testService := getContentCollectionService(db, labels, relation)
+	testService := getContentCollectionService(db, labels, relation, "")
 	defer cleanDB(db, assert)
 
 	err := testService.Write(createContentCollection(2))
@@ -64,6 +66,36 @@ func TestDelete(t *testing.T) {
 	assert.Equal(true, deleted)
 
 	result, found, err = testService.Read(uuid)
+	assert.NoError(err)
+	assert.False(found)
+	assert.Equal(contentCollection{}, result)
+}
+
+func TestDeleteWithExtraRelation(t *testing.T) {
+	assert := assert.New(t)
+	db := getDatabaseConnectionAndCheckClean(t, assert)
+	testServiceNoExtraRelHandle := getContentCollectionService(db, labels, relation, "")
+	testServiceExtraRelHandle := getContentCollectionService(db, labels, relation, extraRelForDelete)
+	defer cleanDB(db, assert)
+
+	err := testServiceNoExtraRelHandle.Write(createContentCollection(2))
+	assert.NoError(err)
+
+	result, found, err := testServiceNoExtraRelHandle.Read(uuid)
+	validateResult(assert, result, found, err, 2)
+
+	err = createExtraRelation(db, uuid)
+	assert.NoError(err)
+
+	deleted, err := testServiceNoExtraRelHandle.Delete(uuid)
+	assert.Equal(false, deleted)
+	assert.Error(err)
+
+	deleted, err = testServiceExtraRelHandle.Delete(uuid)
+	assert.NoError(err)
+	assert.Equal(true, deleted)
+
+	result, found, err = testServiceNoExtraRelHandle.Read(uuid)
 	assert.NoError(err)
 	assert.False(found)
 	assert.Equal(contentCollection{}, result)
@@ -119,6 +151,9 @@ func cleanDB(db neoutils.CypherRunner, assert *assert.Assertions) {
 		{
 			Statement: fmt.Sprintf("MATCH (mc:Thing {uuid: '%v'}) DETACH DELETE mc", uuid),
 		},
+		{
+			Statement: fmt.Sprintf("MATCH (mc:Thing {uuid: '%v'}) DETACH DELETE mc", extraRelThingUUID),
+		},
 	}
 
 	err := db.CypherBatch(qs)
@@ -144,8 +179,37 @@ func checkDbClean(db neoutils.CypherRunner, t *testing.T) {
 	assert.Empty(result)
 }
 
-func getContentCollectionService(db neoutils.NeoConnection, labels []string, relation string) service {
-	s := NewContentCollectionService(db, labels, relation)
+func getContentCollectionService(db neoutils.NeoConnection, labels []string, relation string, extraRelForDelete string) service {
+	s := NewContentCollectionService(db, labels, relation, extraRelForDelete)
 	s.Initialise()
 	return s
+}
+
+func createExtraRelation(cypherRunner neoutils.NeoConnection, ccUUID string) error {
+	params := map[string]interface{}{
+		"uuid": extraRelThingUUID,
+	}
+
+	extraRelThingQuery := &neoism.CypherQuery{
+		Statement: fmt.Sprint(`MERGE (n:Thing {uuid: {uuid}})
+		    set n={allprops}`),
+		Parameters: map[string]interface{}{
+			"uuid":     extraRelThingUUID,
+			"allprops": params,
+		},
+	}
+
+	extraRelQuery := &neoism.CypherQuery{
+		Statement: fmt.Sprintf(`MATCH (cc:Thing {uuid:{ccUuid}})
+			MERGE (content:Thing {uuid: {thingUuid}})
+			MERGE (cc)-[rel:%s]->(content)`, extraRelForDelete),
+		Parameters: map[string]interface{}{
+			"ccUuid":    ccUUID,
+			"thingUuid": extraRelThingUUID,
+		},
+	}
+
+	queries := []*neoism.CypherQuery{extraRelThingQuery, extraRelQuery}
+
+	return cypherRunner.CypherBatch(queries)
 }

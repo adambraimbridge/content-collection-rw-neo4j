@@ -11,20 +11,22 @@ import (
 var defaultLabels = []string{"ContentCollection"}
 
 type service struct {
-	conn         neoutils.NeoConnection
-	joinedLabels string
-	relation     string
+	conn              neoutils.NeoConnection
+	joinedLabels      string
+	relation          string
+	extraRelForDelete string
 }
 
 //instantiate service
-func NewContentCollectionService(cypherRunner neoutils.NeoConnection, labels []string, relation string) service {
+func NewContentCollectionService(cypherRunner neoutils.NeoConnection, labels []string, relation string, extraRelForDelete string) service {
 	labels = append(defaultLabels, labels...)
 	joinedLabels := strings.Join(labels, ":")
 
 	return service{
-		cypherRunner,
-		joinedLabels,
-		relation,
+		conn:              cypherRunner,
+		joinedLabels:      joinedLabels,
+		relation:          relation,
+		extraRelForDelete: extraRelForDelete,
 	}
 }
 
@@ -147,24 +149,40 @@ func addCollectionItemQuery(joinedLabels string, relation string, contentCollect
 
 //Delete - Deletes a content collection
 func (pcd service) Delete(uuid string) (bool, error) {
+	var queries []*neoism.CypherQuery
+
 	removeRelationships := &neoism.CypherQuery{
-		Statement: fmt.Sprintf(`MATCH (n:Thing {uuid: {uuid}})
-			OPTIONAL MATCH (item:Thing)<-[rel:%s]-(n)
+		Statement: fmt.Sprintf(`MATCH (cc:Thing {uuid: {uuid}})
+			OPTIONAL MATCH (item:Thing)<-[rel:%s]-(cc)
 			DELETE rel`, pcd.relation),
 		Parameters: map[string]interface{}{
 			"uuid": uuid,
 		},
 	}
+	queries = append(queries, removeRelationships)
+
+	if pcd.extraRelForDelete != "" {
+		removeExtraRelationships := &neoism.CypherQuery{
+			Statement: fmt.Sprintf(`MATCH (cc:Thing {uuid: {uuid}})
+				OPTIONAL MATCH (t:Thing)<-[rel:%s]-(cc)
+				DELETE rel`, pcd.extraRelForDelete),
+			Parameters: map[string]interface{}{
+				"uuid": uuid,
+			},
+		}
+		queries = append(queries, removeExtraRelationships)
+	}
 
 	removeNode := &neoism.CypherQuery{
-		Statement: `MATCH (n:Thing {uuid: {uuid}}) DELETE n`,
+		Statement: `MATCH (cc:Thing {uuid: {uuid}}) DELETE cc`,
 		Parameters: map[string]interface{}{
 			"uuid": uuid,
 		},
 		IncludeStats: true,
 	}
+	queries = append(queries, removeNode)
 
-	err := pcd.conn.CypherBatch([]*neoism.CypherQuery{removeRelationships, removeNode})
+	_ = pcd.conn.CypherBatch(queries)
 
 	s1, err := removeNode.Stats()
 	if err != nil {
