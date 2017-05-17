@@ -84,8 +84,8 @@ func main() {
 		spServiceUrl := "content-collection/story-package"
 		cpServiceUrl := "content-collection/content-package"
 		services := map[string]baseftrwapp.Service{
-			spServiceUrl: collection.NewContentCollectionService(db, []string{"Curation", "StoryPackage"}, "SELECTS"),
-			cpServiceUrl: collection.NewContentCollectionService(db, []string{}, "CONTAINS"),
+			spServiceUrl: collection.NewContentCollectionService(db, []string{"Curation", "StoryPackage"}, "SELECTS", "IS_CURATED_FOR"),
+			cpServiceUrl: collection.NewContentCollectionService(db, []string{}, "CONTAINS", ""),
 		}
 
 		for _, service := range services {
