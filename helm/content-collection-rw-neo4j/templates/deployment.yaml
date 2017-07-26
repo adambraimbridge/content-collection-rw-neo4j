@@ -21,13 +21,13 @@ spec:
       - name: {{ .Values.service.name }} 
         image: "{{ .Values.image.repository }}:{{ .Chart.Version }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
-        env: 
+        env:
         - name: APP_SYSTEM_CODE 
-          value: {{ .Values.env.APP_SYSTEM_CODE }} 
+          value: "{{ .Values.env.APP_SYSTEM_CODE }}"
         - name: APP_NAME
-          value: {{ .Values.env.APP_NAME }}
+          value: "{{ .Values.env.APP_NAME }}"
         - name: APP_PORT
-          value: {{ .Values.env.APP_PORT }}
+          value: "{{ .Values.env.APP_PORT }}"
         - name: NEO_URL
           valueFrom:
             configMapKeyRef:
@@ -44,11 +44,11 @@ spec:
               name: global-config
               key: graphite.address
         - name: GRAPHITE_PREFIX
-          value: {{ .Values.env.GRAPHITE_PREFIX }}
+          value: "{{ .Values.env.GRAPHITE_PREFIX }}"
         - name: LOG_METRICS
           value: "{{ .Values.env.LOG_METRICS }}"
         - name: CACHE_DURATION
-          value: {{ .Values.env.CACHE_DURATION }}
+          value: "{{ .Values.env.CACHE_DURATION }}"
         ports: 
         - containerPort: 8080 
         livenessProbe: 
