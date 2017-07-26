@@ -23,6 +23,7 @@ _testmain.go
 *.test
 *.prof
 
+content-collection-rw-neo4j*
 .idea
 *.iml
-vendor/*/**
+vendor/*/
