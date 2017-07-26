@@ -1,3 +1,5 @@
+FROM golang:1.8-alpine
+
 ENV PROJECT=content-collection-rw-neo4j
 COPY . /${PROJECT}-sources/
 
