@@ -55,7 +55,7 @@ jobs:
           destination: build
 
   docker_build:
-    working_directory: /public-things-api
+    working_directory: /content-collection-rw-neo4j
     docker:
       - image: docker:1.12.6-git
     steps:

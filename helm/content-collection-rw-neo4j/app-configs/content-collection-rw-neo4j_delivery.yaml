@@ -7,4 +7,4 @@ env:
   APP_NAME: "Content Collection RW Neo4j"
   LOG_METRICS: "false"
   CACHE_DURATION: "30s"
-  GRAPHITE_PREFIX: "coco.services.k8s.content-collection-rw-neo4j"
+  GRAPHITE_PREFIX: "coco.services.{{required \"The target_env value is required for this app. Use helm upgrade ... --set target_env=... when installing.\" .Values.target_env}}.content-collection-rw-neo4j"
