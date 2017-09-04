@@ -1,0 +1,10 @@
+# Values used for the deployed application.
+replicaCount: 1
+service:
+  name: content-collection-rw-neo4j
+env:
+  APP_SYSTEM_CODE: "upp-content-collection-rw-neo4j"
+  APP_NAME: "Content Collection RW Neo4j"
+  LOG_METRICS: "false"
+  CACHE_DURATION: "30s"
+  GRAPHITE_PREFIX: 'coco.services.{{required "The target_env value is required for this app. Use helm upgrade ... --set target_env=... when installing." .Values.target_env}}.content-collection-rw-neo4j'
