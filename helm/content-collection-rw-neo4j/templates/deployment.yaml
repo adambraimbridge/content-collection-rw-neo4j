@@ -45,7 +45,7 @@ spec:
               name: global-config
               key: graphite.address
         - name: GRAPHITE_PREFIX
-          value: "{{ .Values.env.GRAPHITE_PREFIX }}"
+          value: {{ .Values.env.GRAPHITE_PREFIX }}
         - name: LOG_METRICS
           value: "{{ .Values.env.LOG_METRICS }}"
         - name: CACHE_DURATION
