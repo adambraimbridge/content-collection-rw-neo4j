@@ -10,6 +10,7 @@ import (
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	log "github.com/Sirupsen/logrus"
 	"github.com/jawher/mow.cli"
+	"time"
 )
 
 var appDescription = "A RESTful API for managing Content Collections in neo4j"
@@ -95,7 +96,10 @@ func main() {
 		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
 
 		checks := []v1_1.Check{checkNeo4J(services[spServiceUrl], spServiceUrl), checkNeo4J(services[cpServiceUrl], cpServiceUrl)}
-		hc := v1_1.HealthCheck{SystemCode: *appSystemCode, Name: *appName, Description: appDescription, Checks: checks}
+		hc := v1_1.TimedHealthCheck{
+			HealthCheck: v1_1.HealthCheck{SystemCode: *appSystemCode, Name: *appName, Description: appDescription, Checks: checks},
+			Timeout:     10 * time.Second,
+		}
 		baseftrwapp.RunServerWithConf(baseftrwapp.RWConf{
 			Services:      services,
 			HealthHandler: v1_1.Handler(&hc),
