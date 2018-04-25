@@ -55,7 +55,7 @@ spec:
               name: global-config
               key: graphite.address
         - name: GRAPHITE_PREFIX
-          value: {{ .Values.env.GRAPHITE_PREFIX }}
+          value: 'coco.services.{{required "The target_env value is required for this app. Use helm upgrade ... --set target_env=... when installing." .Values.target_env}}.content-collection-rw-neo4j'
         - name: LOG_METRICS
           value: "{{ .Values.env.LOG_METRICS }}"
         - name: CACHE_DURATION
