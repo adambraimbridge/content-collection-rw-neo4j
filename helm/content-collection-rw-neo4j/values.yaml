@@ -18,4 +18,3 @@ env:
   APP_NAME: "" # This should be defined in the specific app-configs folder
   LOG_METRICS: "" # This should be defined in the specific app-configs folder
   CACHE_DURATION: "" # This should be defined in the specific app-configs folder
-  GRAPHITE_PREFIX: "" # This should be defined in the specific app-configs folder
