@@ -1,5 +1,7 @@
 # Content Collection Reader/Writer for Neo4j (content-collection-rw-neo4j)
 
+[![Circle CI](https://circleci.com/gh/Financial-Times/content-collection-rw-neo4j/tree/master.png?style=shield)](https://circleci.com/gh/Financial-Times/content-collection-rw-neo4j/tree/master)
+
 An API for reading/writing Content Collection entities into Neo4j. Expects the json supplied by the ingester.
 
 A content collection is a component created in Methode as story package or content package.
