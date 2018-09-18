@@ -4,13 +4,14 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	"time"
+
 	"github.com/Financial-Times/base-ft-rw-app-go/baseftrwapp"
 	"github.com/Financial-Times/content-collection-rw-neo4j/collection"
 	"github.com/Financial-Times/go-fthealth/v1_1"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	log "github.com/Sirupsen/logrus"
 	"github.com/jawher/mow.cli"
-	"time"
 )
 
 var appDescription = "A RESTful API for managing Content Collections in neo4j"
@@ -39,20 +40,6 @@ func main() {
 		EnvVar: "NEO_URL",
 	})
 
-	graphiteTCPAddress := app.String(cli.StringOpt{
-		Name:   "graphiteTCPAddress",
-		Value:  "",
-		Desc:   "Graphite TCP address, e.g. graphite.ft.com:2003. Leave as default if you do NOT want to output to graphite (e.g. if running locally",
-		EnvVar: "GRAPHITE_ADDRESS",
-	})
-
-	graphitePrefix := app.String(cli.StringOpt{
-		Name:   "graphitePrefix",
-		Value:  "",
-		Desc:   "Prefix to use. Should start with content, include the environment, and the host name. e.g. coco.pre-prod.brands-rw-neo4j.1 or content.test.brands.rw.neo4j.ftaps58938-law1a-eu-t",
-		EnvVar: "GRAPHITE_PREFIX",
-	})
-
 	port := app.Int(cli.IntOpt{
 		Name:   "port",
 		Value:  8080,
@@ -65,13 +52,6 @@ func main() {
 		Value:  1024,
 		Desc:   "Maximum number of statements to execute per batch",
 		EnvVar: "BATCH_SIZE",
-	})
-
-	logMetrics := app.Bool(cli.BoolOpt{
-		Name:   "logMetrics",
-		Value:  false,
-		Desc:   "Whether to log metrics. Set to true if running locally and you want metrics output",
-		EnvVar: "LOG_METRICS",
 	})
 
 	app.Action = func() {
@@ -92,8 +72,6 @@ func main() {
 		for _, service := range services {
 			service.Initialise()
 		}
-
-		baseftrwapp.OutputMetricsIfRequired(*graphiteTCPAddress, *graphitePrefix, *logMetrics)
 
 		checks := []v1_1.Check{checkNeo4J(services[spServiceUrl], spServiceUrl), checkNeo4J(services[cpServiceUrl], cpServiceUrl)}
 		hc := v1_1.TimedHealthCheck{
