@@ -3,9 +3,10 @@ package collection
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	"github.com/jmcvetta/neoism"
-	"strings"
 )
 
 var defaultLabels = []string{"ContentCollection"}
@@ -42,8 +43,13 @@ func (pcd service) Initialise() error {
 	return pcd.conn.EnsureConstraints(constraintMap)
 }
 
-// Check - Feeds into the Healthcheck and checks whether we can connect to Neo and that the datastore isn't empty
+// Check feeds into the Healthcheck and checks whether we can connect to Neo and that we are connected to the leader
 func (pcd service) Check() error {
+	writableErr := neoutils.CheckWritable(pcd.conn)
+	if writableErr != nil {
+		return writableErr
+	}
+
 	return neoutils.Check(pcd.conn)
 }
 
