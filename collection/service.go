@@ -48,7 +48,7 @@ func (pcd service) Check() error {
 }
 
 // Read - reads a content collection given a UUID
-func (pcd service) Read(uuid string) (interface{}, bool, error) {
+func (pcd service) Read(uuid string, transID string) (interface{}, bool, error) {
 	results := []struct {
 		contentCollection
 	}{}
@@ -94,7 +94,7 @@ func (pcd service) Read(uuid string) (interface{}, bool, error) {
 }
 
 //Write - Writes a content collection node
-func (pcd service) Write(newThing interface{}) error {
+func (pcd service) Write(newThing interface{}, transID string) error {
 	newContentCollection := newThing.(contentCollection)
 
 	deleteRelationshipsQuery := &neoism.CypherQuery{
@@ -148,7 +148,7 @@ func addCollectionItemQuery(joinedLabels string, relation string, contentCollect
 }
 
 //Delete - Deletes a content collection
-func (pcd service) Delete(uuid string) (bool, error) {
+func (pcd service) Delete(uuid string, transID string) (bool, error) {
 	var queries []*neoism.CypherQuery
 
 	removeRelationships := &neoism.CypherQuery{
