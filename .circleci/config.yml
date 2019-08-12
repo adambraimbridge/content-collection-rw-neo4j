@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/golang:1.8
+      - image: circleci/golang:1.12
       - image: neo4j:3.4.10-enterprise
         environment:
           NEO4J_AUTH: none
@@ -21,16 +21,18 @@ jobs:
       - run:
           name: "Get build dependencies"
           command: |
-            go get -u github.com/kardianos/govendor
-            go get -u github.com/haya14busa/goverage
-            govendor sync -v
+            curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+      - run:
+          name: Download vendored dependencies
+          command: dep ensure -v -vendor-only
       - run:
           name: "Build project"
           command: |
-            govendor build -v
+            go build -v
       - run:
           name: "Get tests dependencies"
           command: |
+            go get -u github.com/haya14busa/goverage
             go get -u github.com/jstemmer/go-junit-report
             go get -u github.com/mattn/goveralls
             wget https://raw.githubusercontent.com/Financial-Times/cookiecutter-upp-golang/master/coverage.sh && chmod +x coverage.sh
@@ -43,7 +45,7 @@ jobs:
           command: |
             mkdir -p $CIRCLE_TEST_REPORTS/golang
             mkdir -p $CIRCLE_ARTIFACTS
-            govendor test -race -v +local | go-junit-report > $CIRCLE_TEST_REPORTS/golang/junit.xml
+            go test -race -v | go-junit-report > $CIRCLE_TEST_REPORTS/golang/junit.xml
             goverage -covermode=atomic -race -coverprofile=${CIRCLE_ARTIFACTS}/coverage.out ./...
       - run:
           name: "Compute coverage"

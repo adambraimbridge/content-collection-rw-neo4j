@@ -3,9 +3,10 @@ package collection
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	"github.com/Financial-Times/neo-utils-go/neoutils"
 	"github.com/jmcvetta/neoism"
-	"strings"
 )
 
 var defaultLabels = []string{"ContentCollection"}
@@ -42,13 +43,18 @@ func (pcd service) Initialise() error {
 	return pcd.conn.EnsureConstraints(constraintMap)
 }
 
-// Check - Feeds into the Healthcheck and checks whether we can connect to Neo and that the datastore isn't empty
+// Check feeds into the Healthcheck and checks whether we can connect to Neo and that we are connected to the leader
 func (pcd service) Check() error {
+	writableErr := neoutils.CheckWritable(pcd.conn)
+	if writableErr != nil {
+		return writableErr
+	}
+
 	return neoutils.Check(pcd.conn)
 }
 
 // Read - reads a content collection given a UUID
-func (pcd service) Read(uuid string) (interface{}, bool, error) {
+func (pcd service) Read(uuid string, transID string) (interface{}, bool, error) {
 	results := []struct {
 		contentCollection
 	}{}
@@ -94,7 +100,7 @@ func (pcd service) Read(uuid string) (interface{}, bool, error) {
 }
 
 //Write - Writes a content collection node
-func (pcd service) Write(newThing interface{}) error {
+func (pcd service) Write(newThing interface{}, transID string) error {
 	newContentCollection := newThing.(contentCollection)
 
 	deleteRelationshipsQuery := &neoism.CypherQuery{
@@ -148,7 +154,7 @@ func addCollectionItemQuery(joinedLabels string, relation string, contentCollect
 }
 
 //Delete - Deletes a content collection
-func (pcd service) Delete(uuid string) (bool, error) {
+func (pcd service) Delete(uuid string, transID string) (bool, error) {
 	var queries []*neoism.CypherQuery
 
 	removeRelationships := &neoism.CypherQuery{

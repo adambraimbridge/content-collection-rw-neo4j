@@ -10,7 +10,7 @@ import (
 	"github.com/Financial-Times/content-collection-rw-neo4j/collection"
 	"github.com/Financial-Times/go-fthealth/v1_1"
 	"github.com/Financial-Times/neo-utils-go/neoutils"
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"github.com/jawher/mow.cli"
 )
 

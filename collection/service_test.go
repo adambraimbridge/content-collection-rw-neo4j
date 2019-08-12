@@ -23,10 +23,10 @@ func TestWrite(t *testing.T) {
 	testService := getContentCollectionService(db, labels, relation, "")
 	defer cleanDB(db, assert)
 
-	err := testService.Write(createContentCollection(2))
+	err := testService.Write(createContentCollection(2), "tID")
 	assert.NoError(err)
 
-	result, found, err := testService.Read(uuid)
+	result, found, err := testService.Read(uuid, "tID")
 	validateResult(assert, result, found, err, 2)
 }
 
@@ -36,16 +36,16 @@ func TestUpdate(t *testing.T) {
 	testService := getContentCollectionService(db, labels, relation, "")
 	defer cleanDB(db, assert)
 
-	err := testService.Write(createContentCollection(2))
+	err := testService.Write(createContentCollection(2), "tID")
 	assert.NoError(err)
 
-	result, found, err := testService.Read(uuid)
+	result, found, err := testService.Read(uuid, "tID")
 	validateResult(assert, result, found, err, 2)
 
-	err = testService.Write(createContentCollection(3))
+	err = testService.Write(createContentCollection(3), "tID")
 	assert.NoError(err)
 
-	result, found, err = testService.Read(uuid)
+	result, found, err = testService.Read(uuid, "tID")
 	validateResult(assert, result, found, err, 3)
 }
 
@@ -55,17 +55,17 @@ func TestDelete(t *testing.T) {
 	testService := getContentCollectionService(db, labels, relation, "")
 	defer cleanDB(db, assert)
 
-	err := testService.Write(createContentCollection(2))
+	err := testService.Write(createContentCollection(2), "tID")
 	assert.NoError(err)
 
-	result, found, err := testService.Read(uuid)
+	result, found, err := testService.Read(uuid, "tID")
 	validateResult(assert, result, found, err, 2)
 
-	deleted, err := testService.Delete(uuid)
+	deleted, err := testService.Delete(uuid, "tID")
 	assert.NoError(err)
 	assert.Equal(true, deleted)
 
-	result, found, err = testService.Read(uuid)
+	result, found, err = testService.Read(uuid, "tID")
 	assert.NoError(err)
 	assert.False(found)
 	assert.Equal(contentCollection{}, result)
@@ -78,24 +78,24 @@ func TestDeleteWithExtraRelation(t *testing.T) {
 	testServiceExtraRelHandle := getContentCollectionService(db, labels, relation, extraRelForDelete)
 	defer cleanDB(db, assert)
 
-	err := testServiceNoExtraRelHandle.Write(createContentCollection(2))
+	err := testServiceNoExtraRelHandle.Write(createContentCollection(2), "tID")
 	assert.NoError(err)
 
-	result, found, err := testServiceNoExtraRelHandle.Read(uuid)
+	result, found, err := testServiceNoExtraRelHandle.Read(uuid, "tID")
 	validateResult(assert, result, found, err, 2)
 
 	err = createExtraRelation(db, uuid)
 	assert.NoError(err)
 
-	deleted, err := testServiceNoExtraRelHandle.Delete(uuid)
+	deleted, err := testServiceNoExtraRelHandle.Delete(uuid, "tID")
 	assert.Equal(false, deleted)
 	assert.Error(err)
 
-	deleted, err = testServiceExtraRelHandle.Delete(uuid)
+	deleted, err = testServiceExtraRelHandle.Delete(uuid, "tID")
 	assert.NoError(err)
 	assert.Equal(true, deleted)
 
-	result, found, err = testServiceNoExtraRelHandle.Read(uuid)
+	result, found, err = testServiceNoExtraRelHandle.Read(uuid, "tID")
 	assert.NoError(err)
 	assert.False(found)
 	assert.Equal(contentCollection{}, result)
