@@ -14,7 +14,6 @@ The service currently exposes two endpoits:
  
 Functionally, the endpoints behave the same, the only difference being the labels and relations which are saved in **neo4j** by each.
  
- 
 All endpoints support the following operations:
  
 - **GET** with an UUID will retrieve the contents and relations of the neo4j node with the given uuid. The node and relation labels are dictated by the exact handler used.
@@ -88,3 +87,19 @@ depend on the exact handler used.
 e.g. a GET request to `http://host:port/content-collection/story-package/__count` will return 
 the number of story package nodes currently in neo4j. The response is not json formatted, it is simply a number
 like `10` or `0`. 
+
+## How to test
+
+To run the full test suite of tests, you must have a running instance of neo4j. By default the application will look for the elasticsearch instance at http://neo4j:7474/db/data. Otherwise you could specify a URL yourself as given by the example below:
+
+```
+export NEO4J_TEST_URL=http://neo4j:7474/db/data
+```
+
+* Unit tests only: `go test -mod=readonly -race ./...`
+* Unit and integration tests:
+    ```
+    docker-compose -f docker-compose-tests.yml up -d --build && \
+    docker logs -f test-runner && \
+    docker-compose -f docker-compose-tests.yml down -v
+    ```
