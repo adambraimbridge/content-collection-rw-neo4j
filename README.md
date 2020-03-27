@@ -13,20 +13,6 @@ The service currently exposes two endpoits:
 `http://host:port/content-collection/content-package` - for operations on content packages
  
 Functionally, the endpoints behave the same, the only difference being the labels and relations which are saved in **neo4j** by each.
-
-## How to test
-
-To run the full test suite of tests, you must have a running instance of elasticsearch. By default the application will look for the elasticsearch instance at http://localhost:9200. Otherwise you could specify a URL yourself as given by the example below:
-
-```
-export ELASTICSEARCH_TEST_URL=http://localhost:9200
-```
-
-run the command
-
-```
-docker-compose -f docker-compose-tests.yml up test-runner
-```
  
 All endpoints support the following operations:
  
@@ -101,3 +87,17 @@ depend on the exact handler used.
 e.g. a GET request to `http://host:port/content-collection/story-package/__count` will return 
 the number of story package nodes currently in neo4j. The response is not json formatted, it is simply a number
 like `10` or `0`. 
+
+## How to test
+
+To run the full test suite of tests, you must have a running instance of elasticsearch. By default the application will look for the elasticsearch instance at http://localhost:9200. Otherwise you could specify a URL yourself as given by the example below:
+
+```
+export ELASTICSEARCH_TEST_URL=http://localhost:9200
+```
+
+run the command
+
+```
+docker-compose -f docker-compose-tests.yml up test-runner
+```
